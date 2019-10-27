@@ -10,6 +10,7 @@ Metrics include labels for the HTTP method, the path, and the response status co
 
 ```
 starlette_requests_total{method="GET",path="/",status_code="200"} 1.0
+starlette_request_duration_seconds_bucket{le="0.01",method="GET",path="/",status_code="200"} 1.0
 ```
 
 Use the HTTP handler `handle_metrics` at path `/metrics` to expose a metrics endpoint to Prometheus.
@@ -53,3 +54,20 @@ pytest tests
 ## License
 
 Code released under the [Apache License, Version 2.0](https://github.com/bcgov/gwells/blob/master/LICENSE).
+
+
+## Dependencies
+
+https://github.com/prometheus/client_python
+
+https://github.com/encode/starlette
+
+## Credits
+
+Starlette - https://github.com/encode/starlette
+
+FastAPI - https://github.com/tiangolo/fastapi
+
+Flask exporter - https://github.com/rycus86/prometheus_flask_exporter
+
+Alternate Starlette exporter - https://github.com/perdy/starlette-prometheus
