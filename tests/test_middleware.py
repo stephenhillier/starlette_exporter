@@ -5,7 +5,7 @@ from starlette.applications import Starlette
 from starlette.testclient import TestClient
 from starlette.responses import JSONResponse
 from starlette.exceptions import HTTPException
-from starlette_exporter.middleware import PrometheusMiddleware, handle_metrics
+from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 class TestMiddleware:
 
