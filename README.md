@@ -1,5 +1,18 @@
 # starlette_exporter
-Prometheus exporter for Starlette and FastAPI
+Prometheus exporter for Starlette and FastAPI.
+
+The middleware collects basic metrics:
+
+* Counter: starlette_requests_total
+* Histogram: starlette_request_duration_seconds
+
+Metrics include labels for the HTTP method, the path, and the response status code.
+
+```
+starlette_requests_total{method="GET",path="/",status_code="200"} 1.0
+```
+
+Use the HTTP handler `handle_metrics` at path `/metrics` to expose a metrics endpoint to Prometheus.
 
 ## Usage
 

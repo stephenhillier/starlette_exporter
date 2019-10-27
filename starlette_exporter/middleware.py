@@ -1,11 +1,7 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
-import os
 import time
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY, multiprocess, CollectorRegistry
+from prometheus_client import Counter, Histogram
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.endpoints import HTTPEndpoint
-from starlette.responses import Response
-from starlette.exceptions import HTTPException
 
 REQUEST_TIME = Histogram(
             'starlette_request_duration_seconds',
@@ -48,21 +44,3 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             REQUEST_TIME.labels(method, path, status_code).observe(end - begin)
 
         return response
-
-
-def handle_metrics(request):
-    """ A handler to expose Prometheus metrics
-        Example usage:
-
-        ```
-        app.add_middleware(PrometheusMiddleware)
-        app.add_route("/metrics", handle_metrics)
-        ```
-    """
-    registry = REGISTRY
-    if 'prometheus_multiproc_dir' in os.environ:
-        registry = CollectorRegistry()
-        multiprocess.MultiProcessCollector(registry)
-    
-    headers = {'Content-Type': CONTENT_TYPE_LATEST}
-    return Response(generate_latest(), status_code=200, headers=headers)
