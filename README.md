@@ -1,9 +1,9 @@
 # starlette_exporter
 Prometheus exporter for Starlette and FastAPI
 
-# Usage
+## Usage
 
-## Starlette
+### Starlette
 
 ```python
         from starlette.applications import Starlette
@@ -16,7 +16,7 @@ Prometheus exporter for Starlette and FastAPI
         ...
 ```
 
-## FastAPI
+### FastAPI
 
 ```python
         from fastapi import FastAPI
@@ -29,7 +29,7 @@ Prometheus exporter for Starlette and FastAPI
         ...
 ```
 
-# Developing
+## Developing
 
 ```sh
 git clone https://github.com/stephenhillier/starlette_exporter
@@ -37,6 +37,6 @@ cd starlette_exporter
 pytest tests
 ```
 
-# License
+## License
 
 Code released under the [Apache License, Version 2.0](https://github.com/bcgov/gwells/blob/master/LICENSE).
