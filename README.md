@@ -17,6 +17,10 @@ Use the HTTP handler `handle_metrics` at path `/metrics` to expose a metrics end
 
 ## Usage
 
+```sh
+pip install starlette_exporter
+```
+
 ### Starlette
 
 ```python
