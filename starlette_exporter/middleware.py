@@ -2,6 +2,10 @@
 import time
 from prometheus_client import Counter, Histogram
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
+from logging import getLogger
+
+logger = getLogger("exporter")
 
 REQUEST_TIME = Histogram(
             'starlette_request_duration_seconds',
@@ -20,22 +24,35 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         Use in conjuction with the Prometheus exporter endpoint handler.
     """
 
+
+
+    def __init__(self, app: ASGIApp, use_path_params: bool = False):
+        super().__init__(app)
+        self.use_path_params = use_path_params
+
     async def dispatch(self, request, call_next):
-        
         method = request.method
-        path = request.url.path
+        path = None
         begin = time.time()
 
-        # Default status code for unhandled exceptions. Exceptions that are handled in the application
-        # and raise a `starlette.exceptions.HTTPException` will return a valid response, and the status
-        # code will be set accordingly. In other words, an exception is not expected here if the 
-        # application code explicitly raises an HTTPException, but an unhandled ValueError will result
-        # in an exception here. It's assumed that a 500 status code will be appropriate in that case.
+        # Default status code used when the application does not return a valid response
+        # or an unhandled exception occurs.
         status_code = 500
 
         try:
             response = await call_next(request)
             status_code = response.status_code
+
+            # use_path_params enables returning the original router path (with url param names)
+            # the second check is to ensure that an endpoint was matched before trying to determine the name.
+            if self.use_path_params and request.scope.get('endpoint', None):
+                try:
+                    path = [route for route in request.scope['router'].routes if route.endpoint == request.scope['endpoint']][0].path
+                except e:
+                    logger.error(e)
+
+            path = path or request.url.path
+
         except Exception as e:
             raise e
         finally:
