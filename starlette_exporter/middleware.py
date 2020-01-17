@@ -32,7 +32,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         method = request.method
-        path = None
+        path = request.url.path
         begin = time.time()
 
         # Default status code used when the application does not return a valid response
@@ -50,8 +50,6 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
                     path = [route for route in request.scope['router'].routes if route.endpoint == request.scope['endpoint']][0].path
                 except Exception as e:
                     logger.error(e)
-
-            path = path or request.url.path
 
         except Exception as e:
             raise e
