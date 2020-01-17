@@ -26,9 +26,9 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
 
 
-    def __init__(self, app: ASGIApp, use_path_params: bool = False):
+    def __init__(self, app: ASGIApp, group_paths: bool = False):
         super().__init__(app)
-        self.use_path_params = use_path_params
+        self.group_paths = group_paths
 
     async def dispatch(self, request, call_next):
         method = request.method
@@ -43,12 +43,12 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             status_code = response.status_code
 
-            # use_path_params enables returning the original router path (with url param names)
+            # group_paths enables returning the original router path (with url param names)
             # the second check is to ensure that an endpoint was matched before trying to determine the name.
-            if self.use_path_params and request.scope.get('endpoint', None):
+            if self.group_paths and request.scope.get('endpoint', None):
                 try:
                     path = [route for route in request.scope['router'].routes if route.endpoint == request.scope['endpoint']][0].path
-                except e:
+                except Exception as e:
                     logger.error(e)
 
             path = path or request.url.path
