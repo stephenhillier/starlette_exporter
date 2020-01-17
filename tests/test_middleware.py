@@ -83,7 +83,7 @@ class TestMiddlewareGroupedPaths:
     def app(self):
         """ create a test app with various endpoints for the test scenarios """
         app = Starlette()
-        app.add_middleware(PrometheusMiddleware)
+        app.add_middleware(PrometheusMiddleware, group_paths=True)
         app.add_route("/metrics", handle_metrics)
 
         @app.route("/200/{test_param}")
