@@ -43,6 +43,10 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             status_code = response.status_code
 
+        except Exception as e:
+            raise e
+
+        finally:
             # group_paths enables returning the original router path (with url param names)
             # the second check is to ensure that an endpoint was matched before trying to determine the name.
             if self.group_paths and request.scope.get('endpoint', None):
@@ -51,10 +55,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
                 except Exception as e:
                     logger.error(e)
 
-        except Exception as e:
-            raise e
-        finally:
             end = time.time()
+
             REQUEST_COUNT.labels(method, path, status_code).inc()
             REQUEST_TIME.labels(method, path, status_code).observe(end - begin)
 

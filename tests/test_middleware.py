@@ -73,7 +73,7 @@ class TestMiddleware:
 
         assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/200",status_code="200"}""" in metrics
         assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/500",status_code="500"}""" in metrics
-        assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/500",status_code="500"}""" in metrics
+        assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/unhandled",status_code="500"}""" in metrics
 
 
 class TestMiddlewareGroupedPaths:
@@ -129,6 +129,17 @@ class TestMiddlewareGroupedPaths:
 
         assert """starlette_requests_total{method="GET",path="/unhandled/{test_param}",status_code="500"} 1.0""" in metrics
 
+    def test_404(self, client):
+        """ test that a 404 is handled properly, even though the path won't be matched """
+        try:
+            client.get('/not_found/11111')
+        except:
+            pass
+        metrics = client.get('/metrics').content.decode()
+
+        assert """starlette_requests_total{method="GET",path="/not_found/11111",status_code="404"} 1.0""" in metrics
+
+
     def test_histogram(self, client):
         """ test that histogram buckets appear after making requests """
 
@@ -143,4 +154,4 @@ class TestMiddlewareGroupedPaths:
 
         assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/200/{test_param}",status_code="200"}""" in metrics
         assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/500/{test_param}",status_code="500"}""" in metrics
-        assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/500/{test_param}",status_code="500"}""" in metrics
+        assert """starlette_request_duration_seconds_bucket{le="0.005",method="GET",path="/unhandled/{test_param}",status_code="500"}""" in metrics
