@@ -9,14 +9,14 @@ logger = getLogger("exporter")
 
 
 REQUEST_TIME = Histogram(
-    f"starlette_request_duration_seconds",
+    "starlette_request_duration_seconds",
     "HTTP request duration, in seconds",
     ("method", "path", "status_code", "app_name"),
 )
 
 
 REQUEST_COUNT = Counter(
-    f"starlette_requests_total",
+    "starlette_requests_total",
     "Total HTTP requests",
     ("method", "path", "status_code", "app_name"),
 )
