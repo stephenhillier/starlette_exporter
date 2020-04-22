@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='starlette_exporter',
-    version='0.1.0',
+    version='0.3.0',
     author='Stephen Hillier',
     author_email='stephenhillier@gmail.com',
     packages=['starlette_exporter'],
