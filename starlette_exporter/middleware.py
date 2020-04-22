@@ -7,28 +7,29 @@ from logging import getLogger
 
 logger = getLogger("exporter")
 
+
 REQUEST_TIME = Histogram(
-            'starlette_request_duration_seconds',
-            'HTTP request duration, in seconds',
-            ('method', 'path', 'status_code'),
-        )
+    f"starlette_request_duration_seconds",
+    "HTTP request duration, in seconds",
+    ("method", "path", "status_code", "app_name"),
+)
+
 
 REQUEST_COUNT = Counter(
-            'starlette_requests_total',
-            'Total HTTP requests',
-            ('method', 'path', 'status_code'),
-        )
+    f"starlette_requests_total",
+    "Total HTTP requests",
+    ("method", "path", "status_code", "app_name"),
+)
+
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """ Middleware that collects Prometheus metrics for each request.
         Use in conjuction with the Prometheus exporter endpoint handler.
     """
-
-
-
-    def __init__(self, app: ASGIApp, group_paths: bool = False):
+    def __init__(self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette"):
         super().__init__(app)
         self.group_paths = group_paths
+        self.app_name = app_name
 
     async def dispatch(self, request, call_next):
         method = request.method
@@ -57,7 +58,9 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
             end = time.time()
 
-            REQUEST_COUNT.labels(method, path, status_code).inc()
-            REQUEST_TIME.labels(method, path, status_code).observe(end - begin)
+            labels = [method, path, status_code, self.app_name]
+
+            REQUEST_COUNT.labels(*labels).inc()
+            REQUEST_TIME.labels(*labels).observe(end - begin)
 
         return response
