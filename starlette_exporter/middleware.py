@@ -50,7 +50,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         finally:
             # group_paths enables returning the original router path (with url param names)
             # the second check is to ensure that an endpoint was matched before trying to determine the name.
-            if self.group_paths and request.scope.get('endpoint', None):
+            if self.group_paths and request.scope.get('endpoint', None) and request.scope.get('router', None):
                 try:
                     path = [route for route in request.scope['router'].routes if route.endpoint == request.scope['endpoint']][0].path
                 except Exception as e:
