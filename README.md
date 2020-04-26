@@ -49,11 +49,13 @@ pip install starlette_exporter
 
 ## Options
 
+`app_name`: Sets the value of the `app_name` label for exported metrics (default: `starlette`).
+
 `group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`.  This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
 
 Example: 
 ```python
-app.add_middleware(PrometheusMiddleware, group_paths=True)
+app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True)
 ```
 
 ## Developing
