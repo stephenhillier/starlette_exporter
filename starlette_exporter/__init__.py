@@ -19,4 +19,4 @@ def handle_metrics(request):
         multiprocess.MultiProcessCollector(registry)
     
     headers = {'Content-Type': CONTENT_TYPE_LATEST}
-    return Response(generate_latest(), status_code=200, headers=headers)
+    return Response(generate_latest(registry), status_code=200, headers=headers)
