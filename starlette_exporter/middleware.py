@@ -49,10 +49,24 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
         finally:
             # group_paths enables returning the original router path (with url param names)
-            # the second check is to ensure that an endpoint was matched before trying to determine the name.
+            # for example, when using this option, requests to /api/product/1 and /api/product/3
+            # will both be grouped under /api/product/{product_id}. See the README for more info.
             if self.group_paths and request.scope.get('endpoint', None) and request.scope.get('router', None):
+
                 try:
-                    path = [route for route in request.scope['router'].routes if route.endpoint == request.scope['endpoint']][0].path
+                    # try to match the request scope's handler function against one of handlers in the app's router.
+                    # if a match is found, return the path used to mount the handler (e.g. api/product/{product_id}).
+                    path = [
+                        route for route in request.scope['router'].routes
+                            if (hasattr(route, 'endpoint') and route.endpoint  == request.scope['endpoint'])
+                            # for endpoints handled by another app, like fastapi.staticfiles.StaticFiles,
+                            # check if the request endpoint matches a mounted app.
+                            or (hasattr(route, 'app') and route.app == request.scope['endpoint']) 
+                    ][0].path
+                except IndexError:
+                    # no route matched.
+                    # this can happen for routes that don't have an endpoint function.
+                    pass
                 except Exception as e:
                     logger.error(e)
 
