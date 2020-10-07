@@ -1,5 +1,6 @@
 import pytest
 
+from prometheus_client import REGISTRY
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 from starlette.responses import JSONResponse
@@ -7,32 +8,44 @@ from starlette.exceptions import HTTPException
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 
-class TestMiddleware:
-    @pytest.fixture
-    def app(self):
-        """ create a test app with various endpoints for the test scenarios """
+@pytest.fixture
+def testapp():
+    """ create a test app with various endpoints for the test scenarios """
+
+    # unregister all the collectors before we start
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        REGISTRY.unregister(collector)
+
+    def _testapp(**middleware_options):
         app = Starlette()
-        app.add_middleware(PrometheusMiddleware)
+        app.add_middleware(PrometheusMiddleware, **middleware_options)
         app.add_route("/metrics", handle_metrics)
 
         @app.route("/200")
+        @app.route("/200/{test_param}")
         def normal_response(request):
             return JSONResponse({"message": "Hello World"})
 
         @app.route("/500")
+        @app.route("/500/{test_param}")
         async def error(request):
             raise HTTPException(status_code=500, detail="this is a test error")
 
         @app.route("/unhandled")
+        @app.route("/unhandled/{test_param}")
         async def unhandled(request):
             test_dict = {"yup": 123}
             return JSONResponse({"message": test_dict["value_error"]})
 
         return app
+    return _testapp
 
+
+class TestMiddleware:
     @pytest.fixture
-    def client(self, app):
-        return TestClient(app)
+    def client(self, testapp):
+        return TestClient(testapp())
 
     def test_200(self, client):
         """ test that requests appear in the counter """
@@ -97,30 +110,8 @@ class TestMiddlewareGroupedPaths:
     """ tests for group_paths option (using named parameters to group endpoint metrics with path params together) """
 
     @pytest.fixture
-    def app(self):
-        """ create a test app with various endpoints for the test scenarios """
-        app = Starlette()
-        app.add_middleware(PrometheusMiddleware, group_paths=True)
-        app.add_route("/metrics", handle_metrics)
-
-        @app.route("/200/{test_param}")
-        def normal_response(request):
-            return JSONResponse({"message": "Hello World"})
-
-        @app.route("/500/{test_param}")
-        async def error(request):
-            raise HTTPException(status_code=500, detail="this is a test error")
-
-        @app.route("/unhandled/{test_param}")
-        async def unhandled(request):
-            test_dict = {"yup": 123}
-            return JSONResponse({"message": test_dict["value_error"]})
-
-        return app
-
-    @pytest.fixture
-    def client(self, app):
-        return TestClient(app)
+    def client(self, testapp):
+        return TestClient(testapp(group_paths=True))
 
     def test_200(self, client):
         """ test that requests appear in the counter """
