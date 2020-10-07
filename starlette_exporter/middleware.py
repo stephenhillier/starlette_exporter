@@ -1,9 +1,11 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import time
+from logging import getLogger
+
 from prometheus_client import Counter, Histogram
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from logging import getLogger
+
 
 logger = getLogger("exporter")
 
@@ -26,7 +28,10 @@ class PrometheusMiddleware:
     """ Middleware that collects Prometheus metrics for each request.
         Use in conjuction with the Prometheus exporter endpoint handler.
     """
-    def __init__(self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette"):
+
+    def __init__(
+        self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette"
+    ):
         self.app = app
         self.group_paths = group_paths
         self.app_name = app_name
@@ -59,16 +64,27 @@ class PrometheusMiddleware:
             # group_paths enables returning the original router path (with url param names)
             # for example, when using this option, requests to /api/product/1 and /api/product/3
             # will both be grouped under /api/product/{product_id}. See the README for more info.
-            if self.group_paths and request.scope.get('endpoint', None) and request.scope.get('router', None):
+            if (
+                self.group_paths
+                and request.scope.get('endpoint', None)
+                and request.scope.get('router', None)
+            ):
                 try:
                     # try to match the request scope's handler function against one of handlers in the app's router.
                     # if a match is found, return the path used to mount the handler (e.g. api/product/{product_id}).
                     path = [
-                        route for route in request.scope['router'].routes
-                        if (hasattr(route, 'endpoint') and route.endpoint == request.scope['endpoint'])
+                        route
+                        for route in request.scope['router'].routes
+                        if (
+                            hasattr(route, 'endpoint')
+                            and route.endpoint == request.scope['endpoint']
+                        )
                         # for endpoints handled by another app, like fastapi.staticfiles.StaticFiles,
                         # check if the request endpoint matches a mounted app.
-                        or (hasattr(route, 'app') and route.app == request.scope['endpoint'])
+                        or (
+                            hasattr(route, 'app')
+                            and route.app == request.scope['endpoint']
+                        )
                     ][0].path
                 except IndexError:
                     # no route matched.
