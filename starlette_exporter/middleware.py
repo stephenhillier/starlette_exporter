@@ -14,6 +14,7 @@ class PrometheusMiddleware:
     """ Middleware that collects Prometheus metrics for each request.
         Use in conjuction with the Prometheus exporter endpoint handler.
     """
+    _metrics = {}
 
     def __init__(
         self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette",
@@ -22,18 +23,30 @@ class PrometheusMiddleware:
         self.app = app
         self.group_paths = group_paths
         self.app_name = app_name
+        self.prefix = prefix
 
-        self.REQUEST_TIME = Histogram(
-            f"{prefix}_request_duration_seconds",
-            "HTTP request duration, in seconds",
-            ("method", "path", "status_code", "app_name"),
-        )
+    # Starlette initialises middleware multiple times, so store metrics on the class
+    @property
+    def request_count(self):
+        metric_name = f"{self.prefix}_requests_total"
+        if metric_name not in PrometheusMiddleware._metrics:
+            PrometheusMiddleware._metrics[metric_name] = Counter(
+                metric_name,
+                "Total HTTP requests",
+                ("method", "path", "status_code", "app_name"),
+            )
+        return PrometheusMiddleware._metrics[metric_name]
 
-        self.REQUEST_COUNT = Counter(
-            f"{prefix}_requests_total",
-            "Total HTTP requests",
-            ("method", "path", "status_code", "app_name"),
-        )
+    @property
+    def request_time(self):
+        metric_name = f"{self.prefix}_request_duration_seconds"
+        if metric_name not in PrometheusMiddleware._metrics:
+            PrometheusMiddleware._metrics[metric_name] = Histogram(
+                metric_name,
+                "HTTP request duration, in seconds",
+                ("method", "path", "status_code", "app_name"),
+            )
+        return PrometheusMiddleware._metrics[metric_name]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ["http"]:
@@ -96,5 +109,5 @@ class PrometheusMiddleware:
 
             labels = [method, path, status_code, self.app_name]
 
-            self.REQUEST_COUNT.labels(*labels).inc()
-            self.REQUEST_TIME.labels(*labels).observe(end - begin)
+            self.request_count.labels(*labels).inc()
+            self.request_time.labels(*labels).observe(end - begin)

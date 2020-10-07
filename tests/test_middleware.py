@@ -5,6 +5,8 @@ from starlette.applications import Starlette
 from starlette.testclient import TestClient
 from starlette.responses import JSONResponse
 from starlette.exceptions import HTTPException
+
+import starlette_exporter
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 
@@ -17,9 +19,11 @@ def testapp():
     for collector in collectors:
         REGISTRY.unregister(collector)
 
+    PrometheusMiddleware._metrics = {}
+
     def _testapp(**middleware_options):
         app = Starlette()
-        app.add_middleware(PrometheusMiddleware, **middleware_options)
+        app.add_middleware(starlette_exporter.PrometheusMiddleware, **middleware_options)
         app.add_route("/metrics", handle_metrics)
 
         @app.route("/200")
@@ -117,7 +121,7 @@ class TestMiddleware:
         )
 
     def test_prefix(self, testapp):
-        """ test that app_name label is populated correctly """
+        """ test that metric prefixes work """
         client = TestClient(testapp(prefix="myapp"))
 
         client.get('/200')
@@ -125,6 +129,42 @@ class TestMiddleware:
         assert (
             """myapp_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
             in metrics
+        )
+
+    def test_multi_init(self, testapp):
+        """ test that the middleware is happy being initialised multiple times """
+        # newer starlette versions do this
+        # prometheus doesn't like the same metric being registered twice.
+        PrometheusMiddleware(None)
+        PrometheusMiddleware(None)
+
+    def test_multi_prefix(self, testapp):
+        """ test that two collecting apps don't clash """
+        client1 = TestClient(testapp(prefix="app1"))
+        client2 = TestClient(testapp(prefix="app2"))
+
+        client1.get('/200')
+        client2.get('/200')
+
+        # both will return the same metrics though
+        metrics1 = client1.get('/metrics').content.decode()
+        metrics2 = client2.get('/metrics').content.decode()
+
+        assert (
+            """app1_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics1
+        )
+        assert (
+            """app2_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics1
+        )
+        assert (
+            """app1_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics2
+        )
+        assert (
+            """app2_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics2
         )
 
 
