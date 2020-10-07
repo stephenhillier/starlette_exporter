@@ -40,7 +40,7 @@ class PrometheusMiddleware:
 
         method = request.method
         path = request.url.path
-        begin = time.time()
+        begin = time.perf_counter()
 
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
@@ -77,7 +77,7 @@ class PrometheusMiddleware:
                 except Exception as e:
                     logger.error(e)
 
-            end = time.time()
+            end = time.perf_counter()
 
             labels = [method, path, status_code, self.app_name]
 
