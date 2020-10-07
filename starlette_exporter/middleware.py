@@ -10,31 +10,30 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = getLogger("exporter")
 
 
-REQUEST_TIME = Histogram(
-    "starlette_request_duration_seconds",
-    "HTTP request duration, in seconds",
-    ("method", "path", "status_code", "app_name"),
-)
-
-
-REQUEST_COUNT = Counter(
-    "starlette_requests_total",
-    "Total HTTP requests",
-    ("method", "path", "status_code", "app_name"),
-)
-
-
 class PrometheusMiddleware:
     """ Middleware that collects Prometheus metrics for each request.
         Use in conjuction with the Prometheus exporter endpoint handler.
     """
 
     def __init__(
-        self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette"
+        self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette",
+        prefix="starlette"
     ):
         self.app = app
         self.group_paths = group_paths
         self.app_name = app_name
+
+        self.REQUEST_TIME = Histogram(
+            f"{prefix}_request_duration_seconds",
+            "HTTP request duration, in seconds",
+            ("method", "path", "status_code", "app_name"),
+        )
+
+        self.REQUEST_COUNT = Counter(
+            f"{prefix}_requests_total",
+            "Total HTTP requests",
+            ("method", "path", "status_code", "app_name"),
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ["http"]:
@@ -97,5 +96,5 @@ class PrometheusMiddleware:
 
             labels = [method, path, status_code, self.app_name]
 
-            REQUEST_COUNT.labels(*labels).inc()
-            REQUEST_TIME.labels(*labels).observe(end - begin)
+            self.REQUEST_COUNT.labels(*labels).inc()
+            self.REQUEST_TIME.labels(*labels).observe(end - begin)

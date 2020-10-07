@@ -105,6 +105,28 @@ class TestMiddleware:
             in metrics
         )
 
+    def test_app_name(self, testapp):
+        """ test that app_name label is populated correctly """
+        client = TestClient(testapp(app_name="testing"))
+
+        client.get('/200')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """starlette_requests_total{app_name="testing",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        )
+
+    def test_prefix(self, testapp):
+        """ test that app_name label is populated correctly """
+        client = TestClient(testapp(prefix="myapp"))
+
+        client.get('/200')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """myapp_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        )
+
 
 class TestMiddlewareGroupedPaths:
     """ tests for group_paths option (using named parameters to group endpoint metrics with path params together) """
