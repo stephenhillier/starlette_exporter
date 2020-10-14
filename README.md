@@ -24,27 +24,27 @@ pip install starlette_exporter
 ### Starlette
 
 ```python
-        from starlette.applications import Starlette
-        from starlette_exporter import PrometheusMiddleware, handle_metrics
+from starlette.applications import Starlette
+from starlette_exporter import PrometheusMiddleware, handle_metrics
 
-        app = Starlette()
-        app.add_middleware(PrometheusMiddleware)
-        app.add_route("/metrics", handle_metrics)
+app = Starlette()
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", handle_metrics)
 
-        ...
+...
 ```
 
 ### FastAPI
 
 ```python
-        from fastapi import FastAPI
-        from starlette_exporter import PrometheusMiddleware, handle_metrics
+from fastapi import FastAPI
+from starlette_exporter import PrometheusMiddleware, handle_metrics
 
-        app = FastAPI()
-        app.add_middleware(PrometheusMiddleware)
-        app.add_route("/metrics", handle_metrics)
+app = FastAPI()
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", handle_metrics)
 
-        ...
+...
 ```
 
 ## Options
