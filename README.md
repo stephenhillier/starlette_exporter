@@ -60,6 +60,32 @@ Example:
 app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp')
 ```
 
+## Custom Metrics
+
+starlette_exporter will export all the prometheus metrics from the process, so custom metrics can be created by using the prometheus_client API.
+
+#### Example:
+
+```python
+from prometheus_client import Counter
+from starlette.responses import RedirectResponse
+
+REDIRECT_COUNT = Counter("redirect_total", "Count of redirects", ("from",))
+
+async def some_view(request):
+    REDIRECT_COUNT.labels(from="some_view").inc()
+    return RedirectResponse(url="https://example.com", status_code=302)
+```
+
+The new metric will now be included in the the `/metrics` endpoint output:
+
+```
+...
+redirect_total{from="some_view"} 2.0
+...
+```
+
+
 ## Developing
 
 ```sh
