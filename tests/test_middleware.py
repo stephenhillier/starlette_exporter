@@ -109,6 +109,33 @@ class TestMiddleware:
             in metrics
         )
 
+    def test_histogram_custom_buckets(self, testapp):
+        """ test that custom histogram buckets appear after making requests """
+
+        buckets = (10, 20, 30, 40, 50)
+        client = TestClient(testapp(buckets=buckets))
+        client.get('/200')
+        client.get('/500')
+        try:
+            client.get('/unhandled')
+        except:
+            pass
+
+        metrics = client.get('/metrics').content.decode()
+
+        assert (
+            """starlette_request_duration_seconds_bucket{app_name="starlette",le="50.0",method="GET",path="/200",status_code="200"}"""
+            in metrics
+        )
+        assert (
+            """starlette_request_duration_seconds_bucket{app_name="starlette",le="50.0",method="GET",path="/500",status_code="500"}"""
+            in metrics
+        )
+        assert (
+            """starlette_request_duration_seconds_bucket{app_name="starlette",le="50.0",method="GET",path="/unhandled",status_code="500"}"""
+            in metrics
+        )
+
     def test_app_name(self, testapp):
         """ test that app_name label is populated correctly """
         client = TestClient(testapp(app_name="testing"))

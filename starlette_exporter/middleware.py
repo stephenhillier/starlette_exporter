@@ -18,12 +18,15 @@ class PrometheusMiddleware:
 
     def __init__(
         self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette",
-        prefix="starlette"
+        prefix="starlette", buckets=None
     ):
         self.app = app
         self.group_paths = group_paths
         self.app_name = app_name
         self.prefix = prefix
+        self.kwargs = {}
+        if buckets is not None:
+            self.kwargs['buckets'] = buckets
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -45,6 +48,7 @@ class PrometheusMiddleware:
                 metric_name,
                 "HTTP request duration, in seconds",
                 ("method", "path", "status_code", "app_name"),
+                **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
 
