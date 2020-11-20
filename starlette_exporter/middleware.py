@@ -1,6 +1,7 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import time
 from logging import getLogger
+from typing import List, Optional
 
 from prometheus_client import Counter, Histogram
 from starlette.requests import Request
@@ -18,12 +19,14 @@ class PrometheusMiddleware:
 
     def __init__(
         self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette",
-        prefix="starlette", buckets=None
+        prefix: str = "starlette", buckets: Optional[List[str]] = None,
+        filter_unhandled_paths: bool = False,
     ):
         self.app = app
         self.group_paths = group_paths
         self.app_name = app_name
         self.prefix = prefix
+        self.filter_unhandled_paths = filter_unhandled_paths
         self.kwargs = {}
         if buckets is not None:
             self.kwargs['buckets'] = buckets
@@ -77,37 +80,18 @@ class PrometheusMiddleware:
         try:
             await self.app(scope, receive, wrapped_send)
         finally:
-            # group_paths enables returning the original router path (with url param names)
-            # for example, when using this option, requests to /api/product/1 and /api/product/3
-            # will both be grouped under /api/product/{product_id}. See the README for more info.
-            if (
-                self.group_paths
-                and request.scope.get('endpoint', None)
-                and request.scope.get('router', None)
-            ):
-                try:
-                    # try to match the request scope's handler function against one of handlers in the app's router.
-                    # if a match is found, return the path used to mount the handler (e.g. api/product/{product_id}).
-                    path = [
-                        route
-                        for route in request.scope['router'].routes
-                        if (
-                            hasattr(route, 'endpoint')
-                            and route.endpoint == request.scope['endpoint']
-                        )
-                        # for endpoints handled by another app, like fastapi.staticfiles.StaticFiles,
-                        # check if the request endpoint matches a mounted app.
-                        or (
-                            hasattr(route, 'app')
-                            and route.app == request.scope['endpoint']
-                        )
-                    ][0].path
-                except IndexError:
-                    # no route matched.
-                    # this can happen for routes that don't have an endpoint function.
-                    pass
-                except Exception as e:
-                    logger.error(e)
+            if self.filter_unhandled_paths or self.group_paths:
+                grouped_path = self._get_router_path(request)
+
+                # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
+                if self.filter_unhandled_paths and grouped_path is None:
+                    return
+
+                # group_paths enables returning the original router path (with url param names)
+                # for example, when using this option, requests to /api/product/1 and /api/product/3
+                # will both be grouped under /api/product/{product_id}. See the README for more info.
+                if self.group_paths and grouped_path is not None:
+                    path = grouped_path
 
             end = time.perf_counter()
 
@@ -115,3 +99,27 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
+
+    @staticmethod
+    def _get_router_path(request: Request) -> Optional[str]:
+        """Returns the original router path (with url param names) for given request."""
+        try:
+            if not (request.scope.get('endpoint') and request.scope.get('router')):
+                return None
+
+            for route in request.scope['router'].routes:
+                if ((
+                        hasattr(route, 'endpoint')
+                        and route.endpoint == request.scope['endpoint']
+                    )
+                    # for endpoints handled by another app, like fastapi.staticfiles.StaticFiles,
+                    # check if the request endpoint matches a mounted app.
+                    or (
+                        hasattr(route, 'app')
+                        and route.app == request.scope['endpoint']
+                    )):
+                    return route.path
+        except:
+            logger.exception("Failed to fetch router path.")
+        
+        return None

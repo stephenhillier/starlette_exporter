@@ -147,6 +147,14 @@ class TestMiddleware:
             in metrics
         )
 
+    def test_filter_unhandled_paths(self, testapp):
+        """ test that app_name label is populated correctly """
+        client = TestClient(testapp(filter_unhandled_paths=True))
+
+        client.get('/this_path_does_not_exist')
+        metrics = client.get('/metrics').content.decode()
+        assert 'this_path_does_not_exist' not in metrics
+
     def test_prefix(self, testapp):
         """ test that metric prefixes work """
         client = TestClient(testapp(prefix="myapp"))
