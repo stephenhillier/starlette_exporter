@@ -51,9 +51,11 @@ app.add_route("/metrics", handle_metrics)
 
 `app_name`: Sets the value of the `app_name` label for exported metrics (default: `starlette`).
 
+`prefix`: Sets the prefix of the exported metric names (default: `starlette`).
+
 `group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`.  This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
 
-`prefix`: Sets the prefix of the exported metric names (default: `starlette`).
+`filter_unhandled_paths`: setting this to `True` will cause the middleware to ignore requests with unhandled paths (in other words, 404 errors). This helps prevent filling up the metrics with 404 errors and/or intentially bad requests. Default is `False`.
 
 `buckets`: accepts an optional list of numbers to use as histogram buckets. The default value is `None`, which will cause the library to fall back on the Prometheus defaults (currently `[0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]`).
 
