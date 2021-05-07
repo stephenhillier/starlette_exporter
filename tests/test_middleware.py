@@ -305,5 +305,5 @@ class TestBackgroundTasks:
         duration = background_metric[0].split('} ')[1]
 
         # the test function contains a 0.1 second background task. Ensure the metric records the response
-        # as smaller than 1 second.
+        # as smaller than 0.1 second.
         assert float(duration) < 0.1
