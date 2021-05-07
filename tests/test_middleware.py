@@ -1,11 +1,11 @@
 import pytest
-
+import time
 from prometheus_client import REGISTRY
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 from starlette.responses import JSONResponse
 from starlette.exceptions import HTTPException
-
+from starlette.background import BackgroundTask
 import starlette_exporter
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 
@@ -41,6 +41,13 @@ def testapp():
         async def unhandled(request):
             test_dict = {"yup": 123}
             return JSONResponse({"message": test_dict["value_error"]})
+
+        @app.route("/background")
+        async def background(request):
+            def backgroundtask():
+                time.sleep(0.1)
+            task = BackgroundTask(backgroundtask)
+            return JSONResponse({"message": "task started"}, background=task)
 
         return app
     return _testapp
@@ -281,3 +288,22 @@ class TestMiddlewareGroupedPaths:
             """starlette_request_duration_seconds_bucket{app_name="starlette",le="0.005",method="GET",path="/unhandled/{test_param}",status_code="500"}"""
             in metrics
         )
+
+
+class TestBackgroundTasks:
+    """ tests for ensuring the middleware handles requests involving background tasks """
+    
+    @pytest.fixture
+    def client(self, testapp):
+        return TestClient(testapp())
+    
+    def test_background_task_endpoint(self, client):
+        client.get("/background")
+
+        metrics = client.get('/metrics').content.decode()
+        background_metric = [s for s in metrics.split('\n') if ('starlette_request_duration_seconds_sum' in s and 'path="/background"' in s)]
+        duration = background_metric[0].split('} ')[1]
+
+        # the test function contains a 0.1 second background task. Ensure the metric records the response
+        # as smaller than 1 second.
+        assert float(duration) < 0.1

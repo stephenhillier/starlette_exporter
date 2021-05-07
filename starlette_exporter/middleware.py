@@ -65,7 +65,8 @@ class PrometheusMiddleware:
         method = request.method
         path = request.url.path
         begin = time.perf_counter()
-
+        end = None
+        
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
         status_code = 500
@@ -74,6 +75,10 @@ class PrometheusMiddleware:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
                 status_code = message['status']
+
+            if message['type'] == 'http.response.body':
+                nonlocal end
+                end = time.perf_counter()
 
             await send(message)
 
@@ -93,7 +98,6 @@ class PrometheusMiddleware:
                 if self.group_paths and grouped_path is not None:
                     path = grouped_path
 
-            end = time.perf_counter()
 
             labels = [method, path, status_code, self.app_name]
 
