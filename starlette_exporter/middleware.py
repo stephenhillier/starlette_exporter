@@ -101,6 +101,11 @@ class PrometheusMiddleware:
 
             labels = [method, path, status_code, self.app_name]
 
+            # if we were not able to set end when the response body was written,
+            # set it now.
+            if end is None:
+                end = time.perf_counter()                
+
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
 
