@@ -43,6 +43,8 @@ class PrometheusMiddleware:
             )
         return PrometheusMiddleware._metrics[metric_name]
 
+    # request_time is the duration from receiving a user request to writing
+    # the response body.
     @property
     def request_time(self):
         metric_name = f"{self.prefix}_request_duration_seconds"
@@ -54,6 +56,22 @@ class PrometheusMiddleware:
                 **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
+
+    # processing time is the duration from receiving a user HTTP request
+    # to completing the handler function and any other called functions
+    # such as background tasks.
+    @property
+    def processing_time(self):
+        metric_name = f"{self.prefix}_processing_duration_seconds"
+        if metric_name not in PrometheusMiddleware._metrics:
+            PrometheusMiddleware._metrics[metric_name] = Histogram(
+                metric_name,
+                "Request processing time (including background tasks), in seconds",
+                ("method", "path", "status_code", "app_name"),
+                **self.kwargs,
+            )
+        return PrometheusMiddleware._metrics[metric_name]
+
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ["http"]:
@@ -85,6 +103,8 @@ class PrometheusMiddleware:
         try:
             await self.app(scope, receive, wrapped_send)
         finally:
+
+            processing_time_end = time.perf_counter()
             if self.filter_unhandled_paths or self.group_paths:
                 grouped_path = self._get_router_path(request)
 
@@ -103,6 +123,7 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
+            self.processing_time.labels(*labels).observe(processing_time_end - begin)
 
     @staticmethod
     def _get_router_path(request: Request) -> Optional[str]:
