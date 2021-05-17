@@ -1,7 +1,8 @@
 # starlette_exporter
-Prometheus exporter for Starlette and FastAPI.
 
-The middleware collects basic metrics:
+## Prometheus exporter for Starlette and FastAPI
+
+starlette_exporter collects basic metrics for Starlette and FastAPI based applications:
 
 * Counter: starlette_requests_total
 * Histogram: starlette_request_duration_seconds
@@ -14,6 +15,17 @@ starlette_request_duration_seconds_bucket{le="0.01",method="GET",path="/",status
 ```
 
 Use the HTTP handler `handle_metrics` at path `/metrics` to expose a metrics endpoint to Prometheus.
+
+## Table of Contents
+
+1. [Usage](#usage)
+    1. [Starlette](#starlette)
+    1. [FastAPI](#fastapi)
+1. [Options](#options)
+1. [Custom metrics](#custom-metrics)
+1. [Multiprocess mode (gunicorn deployments)](#multiprocess-mode-gunicorn-deployments)
+1. [Developing](#developing)
+1. [License](#license)
 
 ## Usage
 
@@ -89,6 +101,11 @@ redirect_total{from="some_view"} 2.0
 ...
 ```
 
+## Multiprocess mode (gunicorn deployments)
+
+Running starlette_exporter in a multiprocess deployment (e.g. with gunicorn) will need the `prometheus_multiproc_dir` env variable set, as well as extra gunicorn config.
+
+For more information, see the [Prometheus Python client documentation](https://github.com/prometheus/client_python#multiprocess-mode-eg-gunicorn).
 
 ## Developing
 
