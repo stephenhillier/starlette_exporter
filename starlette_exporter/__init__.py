@@ -21,7 +21,10 @@ def handle_metrics(request):
         ```
     """
     registry = REGISTRY
-    if 'prometheus_multiproc_dir' in os.environ:
+    if (
+        'prometheus_multiproc_dir' in os.environ
+        or 'PROMETHEUS_MULTIPROC_DIR' in os.environ
+    ):
         registry = CollectorRegistry()
         multiprocess.MultiProcessCollector(registry)
 

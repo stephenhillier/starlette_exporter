@@ -1,9 +1,10 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import time
 from logging import getLogger
-from typing import List, Optional
+from typing import List, Optional, ClassVar, Dict
 
 from prometheus_client import Counter, Histogram
+from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -15,7 +16,7 @@ class PrometheusMiddleware:
     """ Middleware that collects Prometheus metrics for each request.
         Use in conjuction with the Prometheus exporter endpoint handler.
     """
-    _metrics = {}
+    _metrics: ClassVar[Dict[str, MetricWrapperBase]] = {}
 
     def __init__(
         self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette",
@@ -66,7 +67,7 @@ class PrometheusMiddleware:
         path = request.url.path
         begin = time.perf_counter()
         end = None
-        
+
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
         status_code = 500
@@ -98,13 +99,12 @@ class PrometheusMiddleware:
                 if self.group_paths and grouped_path is not None:
                     path = grouped_path
 
-
             labels = [method, path, status_code, self.app_name]
 
             # if we were not able to set end when the response body was written,
             # set it now.
             if end is None:
-                end = time.perf_counter()                
+                end = time.perf_counter()
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
@@ -130,5 +130,5 @@ class PrometheusMiddleware:
                     return route.path
         except:
             logger.exception("Failed to fetch router path.")
-        
+
         return None
