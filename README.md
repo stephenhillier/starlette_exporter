@@ -103,7 +103,7 @@ redirect_total{from="some_view"} 2.0
 
 ## Multiprocess mode (gunicorn deployments)
 
-Running starlette_exporter in a multiprocess deployment (e.g. with gunicorn) will need the `prometheus_multiproc_dir` env variable set, as well as extra gunicorn config.
+Running starlette_exporter in a multiprocess deployment (e.g. with gunicorn) will need the `PROMETHEUS_MULTIPROC_DIR` env variable set, as well as extra gunicorn config.
 
 For more information, see the [Prometheus Python client documentation](https://github.com/prometheus/client_python#multiprocess-mode-eg-gunicorn).
 
