@@ -6,7 +6,7 @@ from typing import List, Optional, ClassVar, Dict
 from prometheus_client import Counter, Histogram
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import Route, Match
+from starlette.routing import Route, Match, Mount
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
 logging.basicConfig()
@@ -14,47 +14,28 @@ logging.root.setLevel(logging.INFO)
 logger = logging.getLogger("exporter")
 
 
-def get_matching_route_path(scope: Dict, routes: List[Route], endpoint) -> str:
+def get_matching_route_path(scope: Dict, routes: List[Route], route_name: Optional[str] = None) -> str:
     """
     Find a matching route and return its original path string
 
-    Will attempt to enter mounted routes and subrouters.    
+    Will attempt to enter mounted routes and subrouters.
+
+    Credit to https://github.com/elastic/apm-agent-python
     """
-
-    path = ""
-
     for route in routes:
         match, child_scope = route.matches(scope)
         if match == Match.FULL:
-            if (
-                    # Check for a matching handler function
-                    ((
-                        hasattr(route, "endpoint")
-                        and route.endpoint == endpoint
-                    )
-                    # check for a matching ASGIApp (e.g. another mounted Starlette/FastAPI instance)
-                    or (
-                        hasattr(route, "app")
-                        and route.app == endpoint
-                    ))
-            ):
-                return route.path
-            elif hasattr(route, "router"):
-                # If we matched the route but not the endpoint handler,
-                # check if this route has its own router and test those routes.
-                scope.update(child_scope)
-                path += route.path + get_matching_route_path(scope, route["router"].routes, endpoint)
-
-            elif hasattr(route, "app") and hasattr(route, "routes"):
-                # Mounted routes will match against their base path.  If there are more routes available,
-                # test them too to find the full path.
-                scope.update(child_scope)
-                path += route.path + get_matching_route_path(scope, route.routes, endpoint)
-
-            else:
-                raise Exception("No endpoint handler found.")
-
-    return path
+            route_name = route.path
+            child_scope = {**scope, **child_scope}
+            if isinstance(route, Mount) and route.routes:
+                child_route_name = get_matching_route_path(child_scope, route.routes, route_name)
+                if child_route_name is None:
+                    route_name = None
+                else:
+                    route_name += child_route_name
+            return route_name
+        elif match == Match.PARTIAL and route_name is None:
+            route_name = route.path
 
 
 class PrometheusMiddleware:
@@ -160,18 +141,15 @@ class PrometheusMiddleware:
         if not (scope.get("endpoint") and scope.get("router")):
             return None
 
-        request_endpoint = scope.get("endpoint")
-
         base_scope = {
             "type": scope.get("type"),
             "path": scope.get("root_path", "") + scope.get("path"),
             "path_params": scope.get("path_params", {}),
             "method": scope.get("method"),
-            "endpoint": request_endpoint,
         }
 
         try:
-            path = get_matching_route_path(base_scope, scope.get("router").routes, request_endpoint)
+            path = get_matching_route_path(base_scope, scope.get("router").routes)
             return path
         except:
             # unhandled path
