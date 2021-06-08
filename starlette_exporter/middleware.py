@@ -9,8 +9,6 @@ from starlette.requests import Request
 from starlette.routing import Route, Match, Mount
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
-logging.basicConfig()
-logging.root.setLevel(logging.INFO)
 logger = logging.getLogger("exporter")
 
 
