@@ -15,7 +15,11 @@ logger = logging.getLogger("exporter")
 
 
 def get_matching_route_path(scope: Dict, routes: List[Route], endpoint) -> str:
-    """find a matching route and return its path format"""
+    """
+    Find a matching route and return its original path string
+
+    Will attempt to enter mounted routes and subrouters.    
+    """
 
     path = ""
 
@@ -33,8 +37,6 @@ def get_matching_route_path(scope: Dict, routes: List[Route], endpoint) -> str:
                         hasattr(route, "app")
                         and route.app == endpoint
                     ))
-                    # ensure that the endpoint isn't the route itself (indicates there is no handler
-                    # function available)
             ):
                 return route.path
             elif hasattr(route, "router"):
@@ -42,14 +44,12 @@ def get_matching_route_path(scope: Dict, routes: List[Route], endpoint) -> str:
                 # check if this route has its own router and test those routes.
                 scope.update(child_scope)
                 path += route.path + get_matching_route_path(scope, route["router"].routes, endpoint)
-                logger.info(path)
 
             elif hasattr(route, "app") and hasattr(route, "routes"):
                 # Mounted routes will match against their base path.  If there are more routes available,
                 # test them too to find the full path.
                 scope.update(child_scope)
                 path += route.path + get_matching_route_path(scope, route.routes, endpoint)
-                logger.info(path)
 
             else:
                 raise Exception("No endpoint handler found.")
@@ -132,7 +132,7 @@ class PrometheusMiddleware:
             await self.app(scope, receive, wrapped_send)
         finally:
             if self.filter_unhandled_paths or self.group_paths:
-                grouped_path = self._get_router_path(request)
+                grouped_path = self._get_router_path(scope)
 
                 # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
                 if self.filter_unhandled_paths and grouped_path is None:

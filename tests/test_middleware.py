@@ -7,6 +7,8 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route, Router
 from starlette.exceptions import HTTPException
 from starlette.background import BackgroundTask
+from starlette.staticfiles import StaticFiles
+import aiofiles
 import starlette_exporter
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 
@@ -63,7 +65,7 @@ def testapp():
         ])
 
         app.mount("/mounted", mounted_routes)
-
+        app.mount('/static', app=StaticFiles(directory='tests/static'), name="static")
         return app
     return _testapp
 
@@ -202,6 +204,22 @@ class TestMiddleware:
     def test_mounted_path_unhandled(self, testapp):
         """ test an unhandled path that will be partially matched at the mounted base path
         """
+        client = TestClient(testapp(filter_unhandled_paths=True))
+        client.get('/mounted/unhandled/123')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """path="/mounted/unhandled"""
+            not in metrics
+        )
+
+        assert (
+            """path="/mounted"""
+            not in metrics
+        )
+
+    def test_mounted_path_unhandled(self, testapp):
+        """ test an unhandled path that will be partially matched at the mounted base path
+        """
         client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
         client.get('/mounted/unhandled/123')
         metrics = client.get('/metrics').content.decode()
@@ -213,6 +231,17 @@ class TestMiddleware:
         assert (
             """path="/mounted"""
             not in metrics
+        )
+
+    def test_staticfiles_path(self, testapp):
+        """ test a static file path
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True))
+        client.get('/static/test.txt')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """path="/static/test.txt"""
+            in metrics
         )
 
     def test_prefix(self, testapp):
@@ -302,6 +331,16 @@ class TestMiddlewareGroupedPaths:
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/{test_param}",status_code="500"} 1.0"""
             in metrics
+        )
+
+    def test_staticfiles_path(self, testapp):
+        """ test a static file path, with group_paths=True
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
+        client.get('/static/test.txt')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            'path="/static"' in metrics
         )
 
     def test_404(self, client):
