@@ -136,7 +136,7 @@ class PrometheusMiddleware:
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
         """Returns the original router path (with url param names) for given request."""
-        if not (scope.get("endpoint") and scope.get("router")):
+        if not (scope.get("endpoint", None) and scope.get("router", None)):
             return None
 
         base_scope = {
