@@ -1,15 +1,39 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import time
-from logging import getLogger
+import logging
 from typing import List, Optional, ClassVar, Dict
 
 from prometheus_client import Counter, Histogram
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.routing import Route, Match, Mount
+from starlette.types import ASGIApp, Message, Receive, Send, Scope
+
+logger = logging.getLogger("exporter")
 
 
-logger = getLogger("exporter")
+def get_matching_route_path(scope: Dict, routes: List[Route], route_name: Optional[str] = None) -> str:
+    """
+    Find a matching route and return its original path string
+
+    Will attempt to enter mounted routes and subrouters.
+
+    Credit to https://github.com/elastic/apm-agent-python
+    """
+    for route in routes:
+        match, child_scope = route.matches(scope)
+        if match == Match.FULL:
+            route_name = route.path
+            child_scope = {**scope, **child_scope}
+            if isinstance(route, Mount) and route.routes:
+                child_route_name = get_matching_route_path(child_scope, route.routes, route_name)
+                if child_route_name is None:
+                    route_name = None
+                else:
+                    route_name += child_route_name
+            return route_name
+        elif match == Match.PARTIAL and route_name is None:
+            route_name = route.path
 
 
 class PrometheusMiddleware:
@@ -87,7 +111,7 @@ class PrometheusMiddleware:
             await self.app(scope, receive, wrapped_send)
         finally:
             if self.filter_unhandled_paths or self.group_paths:
-                grouped_path = self._get_router_path(request)
+                grouped_path = self._get_router_path(scope)
 
                 # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
                 if self.filter_unhandled_paths and grouped_path is None:
@@ -110,25 +134,23 @@ class PrometheusMiddleware:
             self.request_time.labels(*labels).observe(end - begin)
 
     @staticmethod
-    def _get_router_path(request: Request) -> Optional[str]:
+    def _get_router_path(scope: Scope) -> Optional[str]:
         """Returns the original router path (with url param names) for given request."""
-        try:
-            if not (request.scope.get('endpoint') and request.scope.get('router')):
-                return None
+        if not (scope.get("endpoint", None) and scope.get("router", None)):
+            return None
 
-            for route in request.scope['router'].routes:
-                if ((
-                        hasattr(route, 'endpoint')
-                        and route.endpoint == request.scope['endpoint']
-                    )
-                    # for endpoints handled by another app, like fastapi.staticfiles.StaticFiles,
-                    # check if the request endpoint matches a mounted app.
-                    or (
-                        hasattr(route, 'app')
-                        and route.app == request.scope['endpoint']
-                    )):
-                    return route.path
+        base_scope = {
+            "type": scope.get("type"),
+            "path": scope.get("root_path", "") + scope.get("path"),
+            "path_params": scope.get("path_params", {}),
+            "method": scope.get("method"),
+        }
+
+        try:
+            path = get_matching_route_path(base_scope, scope.get("router").routes)
+            return path
         except:
-            logger.exception("Failed to fetch router path.")
+            # unhandled path
+            pass
 
         return None

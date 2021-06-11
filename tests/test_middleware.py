@@ -3,9 +3,12 @@ import time
 from prometheus_client import REGISTRY
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.routing import Mount, Route, Router
 from starlette.exceptions import HTTPException
 from starlette.background import BackgroundTask
+from starlette.staticfiles import StaticFiles
+import aiofiles
 import starlette_exporter
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 
@@ -49,6 +52,20 @@ def testapp():
             task = BackgroundTask(backgroundtask)
             return JSONResponse({"message": "task started"}, background=task)
 
+        # testing routes added using Mount
+        async def test_mounted_function(request):
+            return JSONResponse({"message": "Hello World"})
+
+        async def test_mounted_function_param(request):
+            return JSONResponse({"message": request.path_params.get("item")})
+
+        mounted_routes = Mount("/", routes=[
+            Route("/test/{item}", test_mounted_function_param),
+            Route("/test", test_mounted_function)
+        ])
+
+        app.mount("/mounted", mounted_routes)
+        app.mount('/static', app=StaticFiles(directory='tests/static'), name="static")
         return app
     return _testapp
 
@@ -162,6 +179,71 @@ class TestMiddleware:
         metrics = client.get('/metrics').content.decode()
         assert 'this_path_does_not_exist' not in metrics
 
+    def test_mounted_path(self, testapp):
+        """ test that mounted paths appear even when filter_unhandled_paths is True """
+        client = TestClient(testapp(filter_unhandled_paths=True))
+        client.get('/mounted/test')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/mounted/test",status_code="200"} 1.0"""
+            in metrics
+        )
+
+    def test_mounted_path_with_param(self, testapp):
+        """ test that mounted paths appear even when filter_unhandled_paths is True
+            this test uses a path param that needs to be found within the mounted route.
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
+        client.get('/mounted/test/123')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/mounted/test/{item}",status_code="200"} 1.0"""
+            in metrics
+        )
+
+    def test_mounted_path_unhandled(self, testapp):
+        """ test an unhandled path that will be partially matched at the mounted base path
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True))
+        client.get('/mounted/unhandled/123')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """path="/mounted/unhandled"""
+            not in metrics
+        )
+
+        assert (
+            """path="/mounted"""
+            not in metrics
+        )
+
+    def test_mounted_path_unhandled(self, testapp):
+        """ test an unhandled path that will be partially matched at the mounted base path
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
+        client.get('/mounted/unhandled/123')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """path="/mounted/unhandled"""
+            not in metrics
+        )
+
+        assert (
+            """path="/mounted"""
+            not in metrics
+        )
+
+    def test_staticfiles_path(self, testapp):
+        """ test a static file path
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True))
+        client.get('/static/test.txt')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """path="/static/test.txt"""
+            in metrics
+        )
+
     def test_prefix(self, testapp):
         """ test that metric prefixes work """
         client = TestClient(testapp(prefix="myapp"))
@@ -251,6 +333,16 @@ class TestMiddlewareGroupedPaths:
             in metrics
         )
 
+    def test_staticfiles_path(self, testapp):
+        """ test a static file path, with group_paths=True
+        """
+        client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
+        client.get('/static/test.txt')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            'path="/static"' in metrics
+        )
+
     def test_404(self, client):
         """ test that a 404 is handled properly, even though the path won't be matched """
         try:
@@ -292,16 +384,17 @@ class TestMiddlewareGroupedPaths:
 
 class TestBackgroundTasks:
     """ tests for ensuring the middleware handles requests involving background tasks """
-    
+
     @pytest.fixture
     def client(self, testapp):
         return TestClient(testapp())
-    
+
     def test_background_task_endpoint(self, client):
         client.get("/background")
 
         metrics = client.get('/metrics').content.decode()
-        background_metric = [s for s in metrics.split('\n') if ('starlette_request_duration_seconds_sum' in s and 'path="/background"' in s)]
+        background_metric = [s for s in metrics.split('\n') if (
+            'starlette_request_duration_seconds_sum' in s and 'path="/background"' in s)]
         duration = background_metric[0].split('} ')[1]
 
         # the test function contains a 0.1 second background task. Ensure the metric records the response
