@@ -86,10 +86,10 @@ starlette_exporter will export all the prometheus metrics from the process, so c
 from prometheus_client import Counter
 from starlette.responses import RedirectResponse
 
-REDIRECT_COUNT = Counter("redirect_total", "Count of redirects", ("from",))
+REDIRECT_COUNT = Counter("redirect_total", "Count of redirects", ["from"])
 
 async def some_view(request):
-    REDIRECT_COUNT.labels(from="some_view").inc()
+    REDIRECT_COUNT.labels("some_view").inc()
     return RedirectResponse(url="https://example.com", status_code=302)
 ```
 
