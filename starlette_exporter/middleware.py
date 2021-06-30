@@ -3,7 +3,7 @@ import time
 import logging
 from typing import List, Optional, ClassVar, Dict
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
 from starlette.routing import Route, Match, Mount
@@ -80,6 +80,19 @@ class PrometheusMiddleware:
             )
         return PrometheusMiddleware._metrics[metric_name]
 
+    @property
+    def request_inprogress(self):
+        metric_name = f"{self.prefix}_request_in_progress"
+        if metric_name not in PrometheusMiddleware._metrics:
+            PrometheusMiddleware._metrics[metric_name] = Gauge(
+                metric_name,
+                "Total HTTP requests currently in progress",
+                ("method", "path", "app_name"),
+                multiprocess_mode="livesum",
+                **self.kwargs,
+            )
+        return PrometheusMiddleware._metrics[metric_name]
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ["http"]:
             await self.app(scope, receive, send)
@@ -91,6 +104,9 @@ class PrometheusMiddleware:
         path = request.url.path
         begin = time.perf_counter()
         end = None
+
+        # Increment inprogress gauge when request comes in
+        self.request_inprogress.labels(method, path, self.app_name).inc()
 
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
@@ -132,6 +148,8 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
+            # Decrement 'inprogress' gauge when response was sent 
+            self.request_inprogress.labels(method, path, self.app_name).dec()
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
