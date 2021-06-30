@@ -97,7 +97,7 @@ The new metric will now be included in the the `/metrics` endpoint output:
 
 ```
 ...
-redirect_total{from="some_view"} 2.0
+redirect_total{redirected_from="some_view"} 2.0
 ...
 ```
 
