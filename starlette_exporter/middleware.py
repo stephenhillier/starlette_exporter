@@ -148,8 +148,8 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            # Decrement 'inprogress' gauge when response was sent 
-            self.request_inprogress.labels(method, path, self.app_name).dec()
+            # Decrement 'requests_in_progress' gauge after response sent 
+            self.requests_in_progress.labels(method, path, self.app_name).dec()
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
