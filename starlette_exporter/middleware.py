@@ -81,7 +81,7 @@ class PrometheusMiddleware:
         return PrometheusMiddleware._metrics[metric_name]
 
     @property
-    def request_inprogress(self):
+    def requests_in_progress(self):
         metric_name = f"{self.prefix}_request_in_progress"
         if metric_name not in PrometheusMiddleware._metrics:
             PrometheusMiddleware._metrics[metric_name] = Gauge(
