@@ -105,8 +105,8 @@ class PrometheusMiddleware:
         begin = time.perf_counter()
         end = None
 
-        # Increment inprogress gauge when request comes in
-        self.request_inprogress.labels(method, path, self.app_name).inc()
+        # Increment requests_in_progress gauge when request comes in
+        self.requests_in_progress.labels(method, path, self.app_name).inc()
 
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
