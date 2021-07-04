@@ -88,8 +88,7 @@ class PrometheusMiddleware:
                 metric_name,
                 "Total HTTP requests currently in progress",
                 ("method", "path", "app_name"),
-                multiprocess_mode="livesum",
-                **self.kwargs,
+                multiprocess_mode="livesum"
             )
         return PrometheusMiddleware._metrics[metric_name]
 
