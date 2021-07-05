@@ -291,6 +291,29 @@ class TestMiddleware:
             in metrics2
         )
 
+    def test_requests_in_progress(self, client):
+        """ test that the requests_in_progress metric (a gauge) is incremented after one request.
+            This test is fairly trivial and doesn't cover decrementing at the end of the request.
+            TODO: create a second asyncronous request and check that the counter is incremented
+            multiple times (and decremented back to zero when all requests done).
+        """
+
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """starlette_requests_in_progress{app_name="starlette",method="GET"} 1.0"""
+            in metrics
+        )
+
+        # try a second time as an alternate way to check that the requests_in_progress metric
+        # was decremented at the end of the first request.  This test could be improved, but
+        # at the very least, it checks that the gauge wasn't incremented multiple times without
+        # also being decremented.
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """starlette_requests_in_progress{app_name="starlette",method="GET"} 1.0"""
+            in metrics
+        )
+
 
 class TestMiddlewareGroupedPaths:
     """ tests for group_paths option (using named parameters to group endpoint metrics with path params together) """
