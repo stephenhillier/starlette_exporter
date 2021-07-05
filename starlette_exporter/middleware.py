@@ -87,7 +87,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Gauge(
                 metric_name,
                 "Total HTTP requests currently in progress",
-                ("method", "path", "app_name"),
+                ("method", "app_name"),
                 multiprocess_mode="livesum"
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -105,7 +105,7 @@ class PrometheusMiddleware:
         end = None
 
         # Increment requests_in_progress gauge when request comes in
-        self.requests_in_progress.labels(method, path, self.app_name).inc()
+        self.requests_in_progress.labels(method, self.app_name).inc()
 
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
@@ -147,8 +147,8 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            # Decrement 'requests_in_progress' gauge after response sent 
-            self.requests_in_progress.labels(method, path, self.app_name).dec()
+            # Decrement 'requests_in_progress' gauge after response sent
+            self.requests_in_progress.labels(method, self.app_name).dec()
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
