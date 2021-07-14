@@ -4,8 +4,9 @@
 
 starlette_exporter collects basic metrics for Starlette and FastAPI based applications:
 
-* Counter: starlette_requests_total
-* Histogram: starlette_request_duration_seconds
+* starlette_requests_total: a counter representing the total requests
+* starlette_request_duration_seconds: a histogram representing the distribution of request response times
+* starlette_requests_in_progress: a gauge that keeps track of how many concurrent requests are being processed
 
 Metrics include labels for the HTTP method, the path, and the response status code.
 
