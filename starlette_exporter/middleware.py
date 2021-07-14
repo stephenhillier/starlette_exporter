@@ -125,6 +125,9 @@ class PrometheusMiddleware:
         try:
             await self.app(scope, receive, wrapped_send)
         finally:
+            # Decrement 'requests_in_progress' gauge after response sent
+            self.requests_in_progress.labels(method, self.app_name).dec()
+
             if self.filter_unhandled_paths or self.group_paths:
                 grouped_path = self._get_router_path(scope)
 
@@ -147,8 +150,6 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            # Decrement 'requests_in_progress' gauge after response sent
-            self.requests_in_progress.labels(method, self.app_name).dec()
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
