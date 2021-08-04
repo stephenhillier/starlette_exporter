@@ -33,7 +33,7 @@ def get_matching_route_path(scope: Dict, routes: List[Route], route_name: Option
                     route_name += child_route_name
             return route_name
         elif match == Match.PARTIAL and route_name is None:
-            route_name = route.path
+            return route.path
 
 
 class PrometheusMiddleware:
