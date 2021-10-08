@@ -72,9 +72,11 @@ app.add_route("/metrics", handle_metrics)
 
 `buckets`: accepts an optional list of numbers to use as histogram buckets. The default value is `None`, which will cause the library to fall back on the Prometheus defaults (currently `[0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]`).
 
+`skip_paths`: accepts an optional list of paths that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
+
 Example:
 ```python
-app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5])
+app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5], skip_paths=['/health'])
 ```
 
 ## Custom Metrics
