@@ -52,6 +52,10 @@ def testapp():
             task = BackgroundTask(backgroundtask)
             return JSONResponse({"message": "task started"}, background=task)
 
+        @app.route("/health")
+        def healthcheck(request):
+            return JSONResponse({"message": "Healthcheck route"})
+
         # testing routes added using Mount
         async def test_mounted_function(request):
             return JSONResponse({"message": "Hello World"})
@@ -312,6 +316,16 @@ class TestMiddleware:
         assert (
             """starlette_requests_in_progress{app_name="starlette",method="GET"} 1.0"""
             in metrics
+        )
+
+    def test_skip_paths(self, testapp):
+        """ test that requests doesn't appear in the counter """
+        client = TestClient(testapp(skip_paths=['/health']))
+        client.get('/health')
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """path="/health"""
+            not in metrics
         )
 
 
