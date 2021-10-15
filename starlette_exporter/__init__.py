@@ -6,14 +6,15 @@ from prometheus_client import (
     multiprocess,
     CollectorRegistry,
 )
+from starlette.requests import Request
 from starlette.responses import Response
 
 from .middleware import PrometheusMiddleware
 
 
-def handle_metrics(request):
-    """ A handler to expose Prometheus metrics
-        Example usage:
+def handle_metrics(request: Request) -> Response:
+    """A handler to expose Prometheus metrics
+    Example usage:
 
         ```
         app.add_middleware(PrometheusMiddleware)
