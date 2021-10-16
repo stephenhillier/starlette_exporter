@@ -1,7 +1,7 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import time
 import logging
-from typing import List, Optional, ClassVar, Dict
+from typing import Any, List, Optional, ClassVar, Dict
 
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
@@ -12,7 +12,7 @@ from starlette.types import ASGIApp, Message, Receive, Send, Scope
 logger = logging.getLogger("exporter")
 
 
-def get_matching_route_path(scope: Dict, routes: List[Route], route_name: Optional[str] = None) -> str:
+def get_matching_route_path(scope: Dict[Any, Any], routes: List[Route], route_name: Optional[str] = None) -> str:
     """
     Find a matching route and return its original path string
 
