@@ -30,7 +30,7 @@ def testapp():
         app.add_route("/metrics", handle_metrics)
 
         @app.route("/200")
-        @app.route("/200/{test_param}")
+        @app.route("/200/{test_param}", methods=["GET", "OPTIONS"])
         def normal_response(request):
             return JSONResponse({"message": "Hello World"})
 
@@ -64,7 +64,7 @@ def testapp():
             return JSONResponse({"message": request.path_params.get("item")})
 
         mounted_routes = Mount("/", routes=[
-            Route("/test/{item}", test_mounted_function_param),
+            Route("/test/{item}", test_mounted_function_param, methods=["GET"]),
             Route("/test", test_mounted_function)
         ])
 
@@ -337,13 +337,27 @@ class TestMiddlewareGroupedPaths:
         return TestClient(testapp(group_paths=True))
 
     def test_200(self, client):
-        """ test that requests appear in the counter """
+        """ test that metrics are grouped by endpoint """
         client.get('/200/111')
         metrics = client.get('/metrics').content.decode()
 
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/200/{test_param}",status_code="200"} 1.0"""
             in metrics
+        )
+
+    def test_200_options(self, client):
+        """ test that metrics are grouped by endpoint """
+        client.options('/200/111')
+        metrics = client.get('/metrics').content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="OPTIONS",path="/200/{test_param}",status_code="200"} 1.0"""
+            in metrics
+        )
+
+        assert (
+            """method="OPTIONS",path="/200/111""" not in metrics
         )
 
     def test_500(self, client):
