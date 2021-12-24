@@ -165,10 +165,18 @@ class PrometheusMiddleware:
         """Returns the original router path (with url param names) for given request."""
         if not (scope.get("endpoint", None) and scope.get("router", None)):
             return None
+        
+        root_path = scope.get("root_path", "")
+        app = scope.get("app", {})
+
+        if hasattr(app, "root_path"):
+            app_root_path = getattr(app, "root_path")
+            if root_path.startswith(app_root_path):
+                root_path = root_path[len(app_root_path):]
 
         base_scope = {
             "type": scope.get("type"),
-            "path": scope.get("root_path", "") + scope.get("path"),
+            "path": root_path + scope.get("path"),
             "path_params": scope.get("path_params", {}),
             "method": scope.get("method"),
         }
