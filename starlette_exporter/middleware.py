@@ -73,8 +73,8 @@ class PrometheusMiddleware:
         return PrometheusMiddleware._metrics[metric_name]
 
     @property
-    def request_body_size_count(self):
-        metric_name = f"{self.prefix}_requests_body_size_total"
+    def request_response_body_size_count(self):
+        metric_name = f"{self.prefix}_requests_response_body_size_total"
         if metric_name not in PrometheusMiddleware._metrics:
             PrometheusMiddleware._metrics[metric_name] = Counter(
                 metric_name,
@@ -123,7 +123,7 @@ class PrometheusMiddleware:
 
         begin = time.perf_counter()
         end = None
-        b_size = 0
+        b_size: int = 0
 
         # Increment requests_in_progress gauge when request comes in
         self.requests_in_progress.labels(method, self.app_name).inc()
@@ -135,13 +135,15 @@ class PrometheusMiddleware:
         async def wrapped_send(message: Message) -> None:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
+                nonlocal b_size
                 status_code = message['status']
+                for message_content_length in message['headers']:
+                    if message_content_length[0].decode('utf-8') == 'content-lenght':
+                        b_size += int(message_content_length[1].decode('utf-8'))
 
             if message['type'] == 'http.response.body':
                 nonlocal end
-                nonlocal b_size
                 end = time.perf_counter()
-                b_size += len(message['body'])
 
             await send(message)
 
@@ -173,7 +175,7 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            self.request_body_size_count(*labels).inc()
+            self.request_response_body_size_count(*labels).inc()
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
