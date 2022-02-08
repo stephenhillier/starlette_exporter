@@ -47,6 +47,7 @@ class PrometheusMiddleware:
         prefix: str = "starlette", buckets: Optional[List[str]] = None,
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
+        optional_property: Optional[List[str]] = None,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -59,6 +60,9 @@ class PrometheusMiddleware:
         self.skip_paths = []
         if skip_paths is not None:
             self.skip_paths = skip_paths
+        self.optional_property_list = []
+        if optional_property is not None:
+            self.optional_property_list = optional_property
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -74,14 +78,17 @@ class PrometheusMiddleware:
 
     @property
     def request_response_body_size_count(self):
-        metric_name = f"{self.prefix}_requests_response_body_size_total"
-        if metric_name not in PrometheusMiddleware._metrics:
-            PrometheusMiddleware._metrics[metric_name] = Counter(
-                metric_name,
-                "Total HTTP body size requests",
-                ("method", "path", "status_code", "app_name"),
-            )
-        return PrometheusMiddleware._metrics[metric_name]
+        if self.optional_property_list != None and 'respose_body_size' in self.optional_property_list:
+            metric_name = f"{self.prefix}_requests_response_body_size_total"
+            if metric_name not in PrometheusMiddleware._metrics:
+                PrometheusMiddleware._metrics[metric_name] = Counter(
+                    metric_name,
+                    "Total HTTP body size requests",
+                    ("method", "path", "status_code", "app_name"),
+                )
+            return PrometheusMiddleware._metrics[metric_name]
+        else:
+            pass
 
     @property
     def request_time(self):
@@ -123,7 +130,8 @@ class PrometheusMiddleware:
 
         begin = time.perf_counter()
         end = None
-        b_size: int = 0
+        if self.optional_property_list != None and 'respose_body_size' in self.optional_property_list:
+            b_size: int = 0
 
         # Increment requests_in_progress gauge when request comes in
         self.requests_in_progress.labels(method, self.app_name).inc()
@@ -135,11 +143,12 @@ class PrometheusMiddleware:
         async def wrapped_send(message: Message) -> None:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
-                nonlocal b_size
                 status_code = message['status']
-                for message_content_length in message['headers']:
-                    if message_content_length[0].decode('utf-8') == 'content-lenght':
-                        b_size += int(message_content_length[1].decode('utf-8'))
+                if self.optional_property_list != None and 'respose_body_size' in self.optional_property_list:
+                    nonlocal b_size
+                    for message_content_length in message['headers']:
+                        if message_content_length[0].decode('utf-8') == 'content-lenght':
+                            b_size += int(message_content_length[1].decode('utf-8'))
 
             if message['type'] == 'http.response.body':
                 nonlocal end
@@ -175,7 +184,8 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            self.request_response_body_size_count(*labels).inc()
+            if self.optional_property_list != None and 'respose_body_size' in self.optional_property_list:
+                self.request_response_body_size_count(*labels).inc()
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
