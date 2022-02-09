@@ -78,11 +78,7 @@ class PrometheusMiddleware:
 
     @property
     def request_response_body_size_count(self):
-<<<<<<< HEAD
         if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
-=======
-        if self.optional_property_list != None and 'response_body_size' in self.optional_property_list:
->>>>>>> b73505e02d9dd1bc130f883e110d127eaabf88c3
             metric_name = f"{self.prefix}_requests_response_body_size_total"
             if metric_name not in PrometheusMiddleware._metrics:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
