@@ -451,3 +451,22 @@ class TestBackgroundTasks:
         # the test function contains a 0.1 second background task. Ensure the metric records the response
         # as smaller than 0.1 second.
         assert float(duration) < 0.1
+
+
+class TestOptionalMetrics:
+    """ tests for optional additional metrics 
+    thanks to Stephen
+    """
+
+    @pytest.fixture
+    def client(self, testapp):
+        return TestClient(testapp(optional_metrics=["response_body_size"]))
+
+    def test_response_body_size(self, client):
+        client.get("/200")
+
+        metrics = client.get('/metrics').content.decode()
+        response_size_metric = [s for s in metrics.split('\n') if (
+            'starlette_requests_response_body_size_total' in s and 'path="/200"' in s)]
+        response_size = response_size_metric[0].split('} ')[1]
+        assert response_size == 11
