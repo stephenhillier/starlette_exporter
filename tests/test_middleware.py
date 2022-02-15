@@ -463,6 +463,7 @@ class TestOptionalMetrics:
 
     def test_response_body_size(self, client):
         client.get('/200')
+        client.get('/200')
 
         metrics = client.get('/metrics').content.decode()
         response_size_metric = [s for s in metrics.split('\n') if (
