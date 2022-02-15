@@ -467,6 +467,6 @@ class TestOptionalMetrics:
         metrics = client.get('/metrics').content.decode()
         response_size_metric = [s for s in metrics.split('\n') if (
             'starlette_requests_response_body_size_total' in s and 'path="/200"' in s)]
-        print (response_size)
+        print (response_size_metric)
         response_size = response_size_metric[0].split('} ')[1]
         assert response_size == 11
