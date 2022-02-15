@@ -455,15 +455,14 @@ class TestBackgroundTasks:
 
 class TestOptionalMetrics:
     """ tests for optional additional metrics 
-    thanks to Stephen
+        thanks to Stephen
     """
-
     @pytest.fixture
     def client(self, testapp):
         return TestClient(testapp(optional_metrics=["response_body_size"]))
 
     def test_response_body_size(self, client):
-        client.get("/200")
+        client.get('/200')
 
         metrics = client.get('/metrics').content.decode()
         response_size_metric = [s for s in metrics.split('\n') if (
