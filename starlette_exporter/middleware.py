@@ -147,7 +147,7 @@ class PrometheusMiddleware:
                 if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
                     nonlocal b_size
                     for message_content_length in message['headers']:
-                        if message_content_length[0].decode('utf-8') == 'content-lenght':
+                        if message_content_length[0].decode('utf-8') == 'content-length':
                             b_size += int(message_content_length[1].decode('utf-8'))
 
             if message['type'] == 'http.response.body':
