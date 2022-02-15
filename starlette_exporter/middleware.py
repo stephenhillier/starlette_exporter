@@ -185,7 +185,7 @@ class PrometheusMiddleware:
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
             if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
-                self.request_response_body_size_count(*labels).inc(b_size)
+                self.request_response_body_size_count.labels(*labels).inc(b_size)
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
