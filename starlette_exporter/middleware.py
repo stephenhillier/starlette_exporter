@@ -47,6 +47,7 @@ class PrometheusMiddleware:
         prefix: str = "starlette", buckets: Optional[List[str]] = None,
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
+        optional_metrics: Optional[List[str]] = None,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -59,6 +60,9 @@ class PrometheusMiddleware:
         self.skip_paths = []
         if skip_paths is not None:
             self.skip_paths = skip_paths
+        self.optional_metrics_list = []
+        if optional_metrics is not None:
+            self.optional_metrics_list = optional_metrics
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -71,6 +75,20 @@ class PrometheusMiddleware:
                 ("method", "path", "status_code", "app_name"),
             )
         return PrometheusMiddleware._metrics[metric_name]
+
+    @property
+    def request_response_body_size_count(self):
+        if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+            metric_name = f"{self.prefix}_requests_response_body_size_total"
+            if metric_name not in PrometheusMiddleware._metrics:
+                PrometheusMiddleware._metrics[metric_name] = Counter(
+                    metric_name,
+                    "Total HTTP body size requests",
+                    ("method", "path", "status_code", "app_name"),
+                )
+            return PrometheusMiddleware._metrics[metric_name]
+        else:
+            pass
 
     @property
     def request_time(self):
@@ -112,6 +130,8 @@ class PrometheusMiddleware:
 
         begin = time.perf_counter()
         end = None
+        if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+            b_size: int = 0
 
         # Increment requests_in_progress gauge when request comes in
         self.requests_in_progress.labels(method, self.app_name).inc()
@@ -124,6 +144,11 @@ class PrometheusMiddleware:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
                 status_code = message['status']
+                if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+                    nonlocal b_size
+                    for message_content_length in message['headers']:
+                        if message_content_length[0].decode('utf-8') == 'content-length':
+                            b_size += int(message_content_length[1].decode('utf-8'))
 
             if message['type'] == 'http.response.body':
                 nonlocal end
@@ -159,6 +184,8 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
+            if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+                self.request_response_body_size_count.labels(*labels).inc(b_size)
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
