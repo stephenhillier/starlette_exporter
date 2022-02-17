@@ -33,7 +33,7 @@ def handle_metrics(request: Request) -> Response:
     headers = {'Content-Type': CONTENT_TYPE_LATEST}
     return Response(generate_latest(registry), status_code=200, headers=headers)
 
-def handle_metric_server(prom_port: int = 9000) -> None:
+def handle_metric_server(prom_port: int = 8000) -> None:
     """A handler to expose Prometheus metrics
     Example usage:
         ```
