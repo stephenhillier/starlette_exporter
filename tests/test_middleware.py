@@ -28,7 +28,7 @@ def testapp():
         app = Starlette()
         app.add_middleware(starlette_exporter.PrometheusMiddleware, **middleware_options)
         app.add_route("/metrics", handle_metrics)
-        handle_metric_server(60000)
+        handle_metric_server(60000, addr='127.0.0.1')
 
         @app.route("/200")
         @app.route("/200/{test_param}", methods=["GET", "OPTIONS"])
