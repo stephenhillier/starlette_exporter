@@ -1,4 +1,5 @@
 import os
+from typing import Dict
 from prometheus_client import (
     generate_latest,
     CONTENT_TYPE_LATEST,
@@ -33,7 +34,7 @@ def handle_metrics(request: Request) -> Response:
     headers = {'Content-Type': CONTENT_TYPE_LATEST}
     return Response(generate_latest(registry), status_code=200, headers=headers)
 
-def handle_metric_server(prom_port: int = 8000) -> None:
+def handle_metric_server(prom_port: int = 8000, **kwargs) -> None:
     """A handler to expose Prometheus metrics
     Example usage:
         ```
@@ -41,4 +42,8 @@ def handle_metric_server(prom_port: int = 8000) -> None:
         app.add_route("/metrics", handle_metrics)
         ```
     """
-    start_http_server(prom_port)
+    if kwargs.get('addr') is not None:
+        address = kwargs.get('addr')
+        start_http_server(prom_port, address)
+    else:
+        start_http_server(prom_port)
