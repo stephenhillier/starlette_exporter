@@ -44,6 +44,6 @@ def handle_metric_server(prom_port: int = 8000, **kwargs) -> None:
     """
     if kwargs.get('addr') is not None:
         address = kwargs.get('addr')
-        start_http_server(prom_port, address)
+        start_http_server(prom_port, addr=address)
     else:
         start_http_server(prom_port)
