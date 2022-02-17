@@ -10,7 +10,7 @@ from starlette.background import BackgroundTask
 from starlette.staticfiles import StaticFiles
 import aiofiles
 import starlette_exporter
-from starlette_exporter import PrometheusMiddleware, handle_metrics
+from starlette_exporter import PrometheusMiddleware, handle_metrics, handle_metric_server
 
 
 @pytest.fixture
@@ -28,6 +28,7 @@ def testapp():
         app = Starlette()
         app.add_middleware(starlette_exporter.PrometheusMiddleware, **middleware_options)
         app.add_route("/metrics", handle_metrics)
+        handle_metric_server(8000)
 
         @app.route("/200")
         @app.route("/200/{test_param}", methods=["GET", "OPTIONS"])
@@ -469,3 +470,10 @@ class TestOptionalMetrics:
             'starlette_requests_response_body_size_total' in s and 'path="/200"' in s)]
         response_size = response_size_metric[0].split('} ')[1]
         assert float(response_size) > 0.1
+
+class TestPortBasedMetrics:
+    """ tests separate server 
+    """
+    @pytest.fixture
+    def client(self, testapp):
+        return TestClient(testapp())
