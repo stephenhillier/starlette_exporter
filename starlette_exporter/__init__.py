@@ -40,7 +40,7 @@ def handle_metric_server(prom_port: int = 8000, **kwargs) -> None:
         ```
         app.add_middleware(PrometheusMiddleware)
         app.prometheus_server = handle_metric_server(8000)
-        prometheus_server
+        app.prometheus_server
         ```
     """
     if kwargs.get('addr') is not None:
