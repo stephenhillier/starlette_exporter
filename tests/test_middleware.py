@@ -462,7 +462,7 @@ class TestOptionalMetrics:
     """
     @pytest.fixture
     def client(self, testapp):
-        return TestClient(testapp(optional_metrics=["any"]))
+        return TestClient(testapp(optional_metrics=["all"]))
 
     def test_response_body_size(self, client):
         client.get('/200')
