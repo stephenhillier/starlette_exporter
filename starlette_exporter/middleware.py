@@ -1,5 +1,4 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
-from email import header
 import time
 import logging
 from typing import Any, List, Optional, ClassVar, Dict
