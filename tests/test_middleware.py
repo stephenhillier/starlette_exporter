@@ -55,7 +55,7 @@ def testapp():
         def healthcheck(request):
             return JSONResponse({"message": "Healthcheck route"})
         
-        @app.route("/post_200", methods=['POST'])
+        @app.route("/post_204", methods=['POST'])
         def post_200(requets):
             return  JSONResponse({"message": "post_200"})
 
@@ -474,13 +474,13 @@ class TestOptionalMetrics:
         assert float(response_size) > 0.1
     
     def test_receive_body_size(self, client):
-        client.post('/post_200',
+        client.post('/post_204',
                     json={"test_post": ["d", "a"]}
                     )
 
         metrics = client.get('/metrics').content.decode()
         rec_size_metric = [s for s in metrics.split('\n') if (
-            'starlette_client_receive_body_size_total' in s and 'path="/post_200"' in s)]
+            'starlette_client_receive_body_size_total' in s and 'path="/post_204"' in s)]
         rec_size = rec_size_metric[0].split('} ')[1]
         assert float(rec_size) > 0.1
     
