@@ -54,6 +54,10 @@ def testapp():
         @app.route("/health")
         def healthcheck(request):
             return JSONResponse({"message": "Healthcheck route"})
+        
+        @app.route("/post_200", methods=['POST'])
+        def post_200(requets):
+            return  JSONResponse({"message": "post_200"})
 
         # testing routes added using Mount
         async def test_mounted_function(request):
@@ -458,7 +462,7 @@ class TestOptionalMetrics:
     """
     @pytest.fixture
     def client(self, testapp):
-        return TestClient(testapp(optional_metrics=["response_body_size"]))
+        return TestClient(testapp(optional_metrics=["any"]))
 
     def test_response_body_size(self, client):
         client.get('/200')
@@ -468,3 +472,15 @@ class TestOptionalMetrics:
             'starlette_requests_response_body_size_total' in s and 'path="/200"' in s)]
         response_size = response_size_metric[0].split('} ')[1]
         assert float(response_size) > 0.1
+    
+    def test_receive_body_size(self, client):
+        client.post('/post_200',
+                    headers={"content-length": 99991111}
+                    )
+
+        metrics = client.get('/metrics').content.decode()
+        response_size_metric = [s for s in metrics.split('\n') if (
+            'starlette_client_receive_body_size_total' in s and 'path="/post_200"' in s)]
+        print (response_size_metric)
+    
+
