@@ -475,7 +475,7 @@ class TestOptionalMetrics:
     
     def test_receive_body_size(self, client):
         client.post('/post_200',
-                    headers={"content-length": 99991111}
+                    json={"test_post": ["d", "a"]}
                     )
 
         metrics = client.get('/metrics').content.decode()
