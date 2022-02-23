@@ -479,8 +479,8 @@ class TestOptionalMetrics:
                     )
 
         metrics = client.get('/metrics').content.decode()
-        response_size_metric = [s for s in metrics.split('\n') if (
+        rec_size_metric = [s for s in metrics.split('\n') if (
             'starlette_client_receive_body_size_total' in s and 'path="/post_200"' in s)]
-        print (response_size_metric)
+        print (rec_size_metric)
     
 
