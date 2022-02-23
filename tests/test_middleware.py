@@ -481,6 +481,7 @@ class TestOptionalMetrics:
         metrics = client.get('/metrics').content.decode()
         rec_size_metric = [s for s in metrics.split('\n') if (
             'starlette_client_receive_body_size_total' in s and 'path="/post_200"' in s)]
-        print (rec_size_metric)
+        rec_size = rec_size_metric[0].split('} ')[1]
+        assert float(rec_size) > 0.1
     
 
