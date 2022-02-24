@@ -6,7 +6,6 @@ from prometheus_client import (
     REGISTRY,
     multiprocess,
     CollectorRegistry,
-    start_http_server,
 )
 from starlette.requests import Request
 from starlette.responses import Response
@@ -33,18 +32,3 @@ def handle_metrics(request: Request) -> Response:
 
     headers = {'Content-Type': CONTENT_TYPE_LATEST}
     return Response(generate_latest(registry), status_code=200, headers=headers)
-
-def handle_metric_server(prom_port: int = 8000, **kwargs) -> None:
-    """A handler to expose Prometheus metrics
-    Example usage:
-        ```
-        app.add_middleware(PrometheusMiddleware)
-        app.prometheus_server = handle_metric_server(8000)
-        app.prometheus_server
-        ```
-    """
-    if kwargs.get('addr') is not None:
-        address = kwargs.get('addr')
-        start_http_server(prom_port, addr=address)
-    else:
-        start_http_server(prom_port)
