@@ -1,5 +1,4 @@
 import os
-from typing import Dict
 from prometheus_client import (
     generate_latest,
     CONTENT_TYPE_LATEST,
