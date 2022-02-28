@@ -469,7 +469,7 @@ class TestOptionalMetrics:
 
         metrics = client.get('/metrics').content.decode()
         response_size_metric = [s for s in metrics.split('\n') if (
-            'starlette_requests_response_body_size_total' in s and 'path="/200"' in s)]
+            'starlette_response_body_bytes_total' in s and 'path="/200"' in s)]
         response_size = response_size_metric[0].split('} ')[1]
         assert float(response_size) > 0.1
     
@@ -480,7 +480,7 @@ class TestOptionalMetrics:
 
         metrics = client.get('/metrics').content.decode()
         rec_size_metric = [s for s in metrics.split('\n') if (
-            'starlette_client_receive_body_size_total' in s and 'path="/post_204"' in s)]
+            'starlette_request_body_bytes_total' in s and 'path="/post_204"' in s)]
         rec_size = rec_size_metric[0].split('} ')[1]
         assert float(rec_size) > 0.1
     
