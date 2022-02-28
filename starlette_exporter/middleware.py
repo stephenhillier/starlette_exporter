@@ -78,12 +78,15 @@ class PrometheusMiddleware:
 
     @property
     def request_response_body_size_count(self):
-        if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
-            metric_name = f"{self.prefix}_requests_response_body_size_total"
+        '''
+        This property is for sent content-length by the server
+        '''
+        if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+            metric_name = f"{self.prefix}_response_body_bytes_total"
             if metric_name not in PrometheusMiddleware._metrics:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
-                    "Total HTTP body size requests",
+                    "Total HTTP response body bytes",
                     ("method", "path", "status_code", "app_name"),
                 )
             return PrometheusMiddleware._metrics[metric_name]
@@ -92,12 +95,15 @@ class PrometheusMiddleware:
     
     @property
     def client_receive_body_size_count(self):
-        if self.optional_metrics_list != None and 'client_receive_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
-            metric_name = f"{self.prefix}_client_receive_body_size_total"
+        '''
+        This property is for received content-length by the server
+        '''
+        if self.optional_metrics_list != None and 'request_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+            metric_name = f"{self.prefix}_request_body_bytes_total"
             if metric_name not in PrometheusMiddleware._metrics:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
-                    "Total HTTP body size received requests",
+                    "Total HTTP request body bytes",
                     ("method", "path", "status_code", "app_name"),
                 )
             return PrometheusMiddleware._metrics[metric_name]
@@ -135,7 +141,7 @@ class PrometheusMiddleware:
 
         request = Request(scope)
 
-        if self.optional_metrics_list != None and 'client_receive_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+        if self.optional_metrics_list != None and 'request_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
             receive_ = Request(scope, receive)
             if receive_.headers.get('content-length'):
                 receive_size = int(receive_.headers['content-length'])
@@ -152,7 +158,7 @@ class PrometheusMiddleware:
 
         begin = time.perf_counter()
         end = None
-        if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+        if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
             b_size: int = 0
 
         # Increment requests_in_progress gauge when request comes in
@@ -166,7 +172,7 @@ class PrometheusMiddleware:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
                 status_code = message['status']
-                if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+                if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
                     nonlocal b_size
                     for message_content_length in message['headers']:
                         if message_content_length[0].decode('utf-8') == 'content-length':
@@ -206,9 +212,9 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+            if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
                 self.request_response_body_size_count.labels(*labels).inc(b_size)
-            if self.optional_metrics_list != None and 'client_receive_body_size' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
+            if self.optional_metrics_list != None and 'request_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
                 self.client_receive_body_size_count.labels(*labels).inc(receive_size)
 
     @staticmethod
