@@ -12,7 +12,6 @@ import aiofiles
 import starlette_exporter
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 
-
 @pytest.fixture
 def testapp():
     """ create a test app with various endpoints for the test scenarios """
@@ -55,6 +54,10 @@ def testapp():
         @app.route("/health")
         def healthcheck(request):
             return JSONResponse({"message": "Healthcheck route"})
+        
+        @app.route("/post_204", methods=['POST'])
+        def post_200(requets):
+            return  JSONResponse({"message": "post_200"})
 
         # testing routes added using Mount
         async def test_mounted_function(request):
@@ -459,13 +462,26 @@ class TestOptionalMetrics:
     """
     @pytest.fixture
     def client(self, testapp):
-        return TestClient(testapp(optional_metrics=["response_body_size"]))
+        return TestClient(testapp(optional_metrics=["all"]))
 
     def test_response_body_size(self, client):
         client.get('/200')
 
         metrics = client.get('/metrics').content.decode()
         response_size_metric = [s for s in metrics.split('\n') if (
-            'starlette_requests_response_body_size_total' in s and 'path="/200"' in s)]
+            'starlette_response_body_bytes_total' in s and 'path="/200"' in s)]
         response_size = response_size_metric[0].split('} ')[1]
         assert float(response_size) > 0.1
+    
+    def test_receive_body_size(self, client):
+        client.post('/post_204',
+                    json={"test_post": ["d", "a"]}
+                    )
+
+        metrics = client.get('/metrics').content.decode()
+        rec_size_metric = [s for s in metrics.split('\n') if (
+            'starlette_request_body_bytes_total' in s and 'path="/post_204"' in s)]
+        rec_size = rec_size_metric[0].split('} ')[1]
+        assert float(rec_size) > 0.1
+    
+
