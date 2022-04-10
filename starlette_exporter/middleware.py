@@ -216,11 +216,8 @@ class PrometheusMiddleware:
                     path = grouped_path
             
             labels = [method, path, status_code, self.app_name]
-            if not self.headers_labels:
-                pass
-            else:
-                for i in self.labels_:
-                    labels.append(request.headers[i])
+            for i in self.labels_:
+                labels.append(request.headers[i])
             
 
             # if we were not able to set end when the response body was written,
