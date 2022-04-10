@@ -491,11 +491,12 @@ class TestOptionalHostExt:
         return TestClient(testapp(hn_ext=True))
         
     def test_hn_ext(self, client):
-        """ test that requests appear in the counter """
+        """ adding to client get header 
+        'host' :  'foo.bar' to simulate the a request header hostname"""
         client.get('/200',
-            headers = {'host' : 'testhost1'},)
+            headers = {'host' : 'foo.bar'},)
         metrics = client.get('/metrics').content.decode()
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="testhost/200",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="foo.bar/200",status_code="200"} 1.0"""
             in metrics
         )
