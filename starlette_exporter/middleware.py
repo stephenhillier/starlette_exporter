@@ -66,6 +66,8 @@ class PrometheusMiddleware:
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
+        
+        self.headers_labels = []
         if headers_labels is not None:
             self.headers_labels = headers_labels
             self.labels_ = tuple(["method", "path", "status_code", "app_name"].extend(self.headers_labels))
@@ -216,7 +218,7 @@ class PrometheusMiddleware:
                     path = grouped_path
             
             labels = [method, path, status_code, self.app_name]
-            if self.headers_labels is not None:
+            if self.headers_labels != None:
                 for i in self.headers_labels:
                     if request.headers[i]:
                         labels.append(request.headers[i])
