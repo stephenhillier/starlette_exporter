@@ -48,6 +48,7 @@ class PrometheusMiddleware:
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
+        headers_labels: Optional[List[str]] = None,
         hn_ext: bool = False,
     ):
         self.app = app
@@ -65,8 +66,13 @@ class PrometheusMiddleware:
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
-
+        if headers_labels is not None:
+            self.headers_labels = headers_labels
+            self.labels_ = tuple(["method", "path", "status_code", "app_name"].extend(self.headers_labels))
+        else:
+            self.labels_ = ("method", "path", "status_code", "app_name")
     # Starlette initialises middleware multiple times, so store metrics on the class
+
     @property
     def request_count(self):
         metric_name = f"{self.prefix}_requests_total"
@@ -74,7 +80,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Counter(
                 metric_name,
                 "Total HTTP requests",
-                ("method", "path", "status_code", "app_name"),
+                self.labels_,
             )
         return PrometheusMiddleware._metrics[metric_name]
 
@@ -89,7 +95,7 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP response body bytes",
-                    ("method", "path", "status_code", "app_name"),
+                    self.labels_,
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -106,7 +112,7 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP request body bytes",
-                    ("method", "path", "status_code", "app_name"),
+                    self.labels_,
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -119,7 +125,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Histogram(
                 metric_name,
                 "HTTP request duration, in seconds",
-                ("method", "path", "status_code", "app_name"),
+                self.labels_,
                 **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -208,8 +214,14 @@ class PrometheusMiddleware:
                 # will both be grouped under /api/product/{product_id}. See the README for more info.
                 if self.group_paths and grouped_path is not None:
                     path = grouped_path
-
+            
             labels = [method, path, status_code, self.app_name]
+            if not self.headers_labels:
+                pass
+            else:
+                for i in self.labels_:
+                    labels.append(request.headers[i])
+            
 
             # if we were not able to set end when the response body was written,
             # set it now.
