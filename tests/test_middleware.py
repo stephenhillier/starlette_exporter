@@ -505,7 +505,7 @@ class TestHeadersLabels:
     def client(self, testapp):
         return TestClient(testapp(headers_labels=["host", "user"]))
         
-    def test_hn_ext(self, client):
+    def test_ok_headers(self, client):
         """ adding to client get header 
         'host' :  'foo.bar' to simulate the a request header hostname"""
         client.get('/200',
@@ -518,3 +518,17 @@ class TestHeadersLabels:
             """starlette_requests_total{app_name="starlette",host="foo.bar",method="GET",path="/200",status_code="200",user="myuseragent"}"""
             in rec_size
         )
+    def test_missing_headers(self, client):
+        """ adding to client get header 
+        'host' :  'foo.bar' to simulate the a request header hostname"""
+        client.get('/200',
+            headers = {'host' : 'foo.bar'},)
+        metrics = client.get('/metrics').content.decode()
+        rec_size_metric = [s for s in metrics.split('\n') if (
+            'user="myuseragent"' in s and 'path="/200"' in s and 'host="foo.bar"' in s)]
+        rec_size = rec_size_metric[0].split('} ')[0]+"}"
+        assert (
+            """starlette_requests_total{app_name="starlette",host="foo.bar",method="GET",path="/200",status_code="200",user="None"}"""
+            in rec_size
+        )
+        
