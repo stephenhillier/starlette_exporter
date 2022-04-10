@@ -225,6 +225,8 @@ class PrometheusMiddleware:
                 for i in self.headers_labels:
                     if request.headers[i]:
                         labels.append(request.headers[i])
+                    else:
+                        labels.append("None")
             
 
             # if we were not able to set end when the response body was written,
