@@ -515,6 +515,6 @@ class TestHeadersLabels:
             'user="myuseragent"' in s and 'path="/200"' in s and 'host="foo.bar"' in s)]
         rec_size = rec_size_metric[0].split('} ')[0]+"}"
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200", host="foo.bar", user="myuseragent"}"""
+            """starlette_requests_total{app_name="starlette",host="foo.bar",method="GET",path="/200",status_code="200",user="myuseragent"}"""
             in rec_size
         )
