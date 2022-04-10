@@ -513,8 +513,8 @@ class TestHeadersLabels:
         metrics = client.get('/metrics').content.decode()
         rec_size_metric = [s for s in metrics.split('\n') if (
             'user="myuseragent"' in s and 'path="/200"' in s and 'host="foo.bar"' in s)]
-        rec_size = rec_size_metric[0].split('} ')[0]
+        rec_size = rec_size_metric[0].split('} ')[0]+}
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200", host="foo.bar", user="myuseragent"}"""
-            in rec_size+"}"
+            in rec_size
         )
