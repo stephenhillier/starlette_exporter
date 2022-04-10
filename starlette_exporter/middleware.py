@@ -71,7 +71,7 @@ class PrometheusMiddleware:
         self.headers_labels = []
         if headers_labels is not None:
             self.headers_labels = headers_labels
-            self.labels_ = tuple(self.labels_.extend(headers_labels))
+            self.labels_ = tuple(self.labels_.extend(self.headers_labels))
         else:
             self.labels_ = tuple(self.labels_)
     # Starlette initialises middleware multiple times, so store metrics on the class
