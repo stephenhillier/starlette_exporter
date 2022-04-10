@@ -503,15 +503,15 @@ class TestOptionalHostExt:
 class TestHeadersLabels:
     @pytest.fixture
     def client(self, testapp):
-        return TestClient(testapp(headers_labels=["host", "user-agent"]))
+        return TestClient(testapp(headers_labels=["host", "user"]))
         
     def test_hn_ext(self, client):
         """ adding to client get header 
         'host' :  'foo.bar' to simulate the a request header hostname"""
         client.get('/200',
-            headers = {'host' : 'foo.bar', 'user-agent': "myuseragent"},)
+            headers = {'host' : 'foo.bar', 'user': "myuseragent"},)
         metrics = client.get('/metrics').content.decode()
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200", host="foo.bar", user-agent="myuseragent"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200", host="foo.bar", user="myuseragent"} 1.0"""
             in metrics
         )
