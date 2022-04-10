@@ -1,3 +1,4 @@
+from wsgiref import headers
 import pytest
 import time
 from prometheus_client import REGISTRY
@@ -492,7 +493,7 @@ class TestOptionalHostExt:
     def test_hn_ext(self, client):
         """ test that requests appear in the counter """
         client.get('/200',
-            header = {'host' : 'testhost'},)
+            headers = {'host' : 'testhost'},)
         metrics = client.get('/metrics').content.decode()
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="testhost/200",status_code="200"} 1.0"""
