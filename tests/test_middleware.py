@@ -484,4 +484,17 @@ class TestOptionalMetrics:
         rec_size = rec_size_metric[0].split('} ')[1]
         assert float(rec_size) > 0.1
     
-
+class TestOptionalHostExt:
+    @pytest.fixture
+    def client(self, testapp):
+        return TestClient(testapp(hn_ext=True))
+        
+    def test_hn_ext(self, client):
+        """ test that requests appear in the counter """
+        client.get('/200',
+            header = {'host' : 'testhost'},)
+        metrics = client.get('/metrics').content.decode()
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="testhost/200",status_code="200"} 1.0"""
+            in metrics
+        )

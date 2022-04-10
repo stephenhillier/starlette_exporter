@@ -48,6 +48,7 @@ class PrometheusMiddleware:
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
+        hn_ext: bool = False,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -55,6 +56,7 @@ class PrometheusMiddleware:
         self.prefix = prefix
         self.filter_unhandled_paths = filter_unhandled_paths
         self.kwargs = {}
+        self.hn_ext = hn_ext
         if buckets is not None:
             self.kwargs['buckets'] = buckets
         self.skip_paths = []
@@ -150,7 +152,11 @@ class PrometheusMiddleware:
 
 
         method = request.method
-        path = request.url.path
+        
+        if self.hn_ext:
+            path = request.headers['host'] + request.url.path
+        else:
+            path = request.url.path
 
         if path in self.skip_paths:
             await self.app(scope, receive, send)
