@@ -223,7 +223,7 @@ class PrometheusMiddleware:
             labels = [method, path, status_code, self.app_name]
             if self.headers_labels != None:
                 for i in self.headers_labels:
-                    if request.headers[i]:
+                    if i in request.headers.keys:
                         labels.append(request.headers[i])
                     else:
                         labels.append("None")
