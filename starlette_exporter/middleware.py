@@ -66,14 +66,14 @@ class PrometheusMiddleware:
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
-        
+
+        self.labels_ = ["method", "path", "status_code", "app_name"]
         self.headers_labels = []
         if headers_labels is not None:
             self.headers_labels = headers_labels
-            labels_ = ["method", "path", "status_code", "app_name"].extend(headers_labels)
-            self.labels_ = tuple(labels_)
+            self.labels_ = tuple(self.labels_.extend(headers_labels))
         else:
-            self.labels_ = ("method", "path", "status_code", "app_name")
+            self.labels_ = tuple(self.labels_)
     # Starlette initialises middleware multiple times, so store metrics on the class
 
     @property
