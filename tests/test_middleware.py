@@ -490,8 +490,12 @@ class TestOptionalHostExt:
         return TestClient(testapp(hn_ext=True))
         
     def test_hn_ext(self, client):
-        """ adding to client get header 
-        'host' :  'foo.bar' to simulate the a request header hostname"""
+        """
+        Simulate path extend reading from headers value host 
+        https://www.ietf.org/rfc/rfc2616.txt
+        The Host request-header field (section 14.23) MUST accompany all
+        HTTP/1.1 requests.
+        """
         client.get('/200',
             headers = {'host' : 'foo.bar'},)
         metrics = client.get('/metrics').content.decode()
@@ -506,8 +510,13 @@ class TestHeadersLabels:
         return TestClient(testapp(headers_labels=["host", "user"]))
         
     def test_ok_headers(self, client):
-        """ adding to client get header 
-        'host' :  'foo.bar' to simulate the a request header hostname"""
+        """
+        Simulating matching headers
+        headers = {
+            'host': 'foobar',
+            'user': 'myuseragent'
+        }
+        """
         client.get('/200',
             headers = {'host' : 'foo.bar', 'user': "myuseragent"},)
         metrics = client.get('/metrics').content.decode()
@@ -519,8 +528,12 @@ class TestHeadersLabels:
             in rec_size
         )
     def test_missing_headers(self, client):
-        """ adding to client get header 
-        'host' :  'foo.bar' to simulate the a request header hostname"""
+        """
+        Simulating missing 'user' in the header
+        headers = {
+            'host': 'foobar'
+        }
+        """
         client.get('/200',
             headers = {'host' : 'foo.bar'},)
         metrics = client.get('/metrics').content.decode()
