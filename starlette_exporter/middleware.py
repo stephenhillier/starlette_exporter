@@ -72,6 +72,8 @@ class PrometheusMiddleware:
         if headers_labels is not None:
             self.headers_labels = headers_labels
             for i in headers_labels:
+                if "-" in i:
+                    i = i.replace("-", "_")
                 self.labels_.append(i)
             self.labels_ = tuple(self.labels_)
         else:
@@ -223,8 +225,8 @@ class PrometheusMiddleware:
             labels = [method, path, status_code, self.app_name]
             if self.headers_labels != None:
                 for i in self.headers_labels:
-                    if i in request.headers.keys():
-                        labels.append(request.headers[i])
+                    if i.lower() in request.headers.keys():
+                        labels.append(request.headers[i.lower()])
                     else:
                         labels.append("None")
             
