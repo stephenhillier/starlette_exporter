@@ -48,7 +48,7 @@ class PrometheusMiddleware:
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
-        always_use_int_status: Optional[bool] = None,
+        always_use_int_status: bool = False,
     ):
         self.app = app
         self.group_paths = group_paths
