@@ -82,7 +82,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Counter(
                 metric_name,
                 "Total HTTP requests",
-                self.labels_,
+                ("method", "path", "status_code", "app_name"),
             )
         return PrometheusMiddleware._metrics[metric_name]
 
@@ -97,7 +97,7 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP response body bytes",
-                    self.labels_,
+                    ("method", "path", "status_code", "app_name"),
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -114,7 +114,7 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP request body bytes",
-                    self.labels_,
+                    ("method", "path", "status_code", "app_name"),
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -127,7 +127,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Histogram(
                 metric_name,
                 "HTTP request duration, in seconds",
-                self.labels_,
+                ("method", "path", "status_code", "app_name"),
                 **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
