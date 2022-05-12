@@ -50,6 +50,7 @@ class PrometheusMiddleware:
         optional_metrics: Optional[List[str]] = None,
         headers_labels: Optional[List[str]] = None,
         hn_ext: bool = False,
+        extra_labels: Optional[Dict] = None,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -66,18 +67,12 @@ class PrometheusMiddleware:
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
-
-        self.labels_ = ["method", "path", "status_code", "app_name"]
         self.headers_labels = []
         if headers_labels is not None:
             self.headers_labels = headers_labels
-            for i in headers_labels:
-                if "-" in i:
-                    i = i.replace("-", "_")
-                self.labels_.append(i)
-            self.labels_ = tuple(self.labels_)
-        else:
-            self.labels_ = tuple(self.labels_)
+            
+        if extra_labels is not None:
+            self.extra_labels = extra_labels
     # Starlette initialises middleware multiple times, so store metrics on the class
 
     @property
@@ -223,12 +218,13 @@ class PrometheusMiddleware:
                     path = grouped_path
             
             labels = [method, path, status_code, self.app_name]
+            extra_labels_header = {}
             if self.headers_labels != None:
                 for i in self.headers_labels:
                     if i.lower() in request.headers.keys():
-                        labels.append(request.headers[i.lower()])
+                        extra_labels_header.update({i : labels.append(request.headers[i.lower()])})
                     else:
-                        labels.append("None")
+                        extra_labels_header.update({i : labels.append("None")})
             
 
             # if we were not able to set end when the response body was written,
@@ -236,12 +232,12 @@ class PrometheusMiddleware:
             if end is None:
                 end = time.perf_counter()
 
-            self.request_count.labels(*labels).inc()
-            self.request_time.labels(*labels).observe(end - begin)
+            self.request_count.labels(*labels).inc(extra_labels)
+            self.request_time.labels(*labels).observe(end - begin,extra_labels)
             if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
-                self.request_response_body_size_count.labels(*labels).inc(b_size)
+                self.request_response_body_size_count.labels(*labels).inc(b_size, extra_labels)
             if self.optional_metrics_list != None and 'request_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
-                self.client_receive_body_size_count.labels(*labels).inc(receive_size)
+                self.client_receive_body_size_count.labels(*labels).inc(receive_size, extra_labels)
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
