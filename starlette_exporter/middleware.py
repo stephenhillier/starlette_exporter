@@ -232,12 +232,12 @@ class PrometheusMiddleware:
             if end is None:
                 end = time.perf_counter()
 
-            self.request_count.labels(*labels).inc(extra_labels)
-            self.request_time.labels(*labels).observe(end - begin,extra_labels)
+            self.request_count.labels(*labels).inc(extra_labels_header)
+            self.request_time.labels(*labels).observe(end - begin,extra_labels_header)
             if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
-                self.request_response_body_size_count.labels(*labels).inc(b_size, extra_labels)
+                self.request_response_body_size_count.labels(*labels).inc(b_size, extra_labels_header)
             if self.optional_metrics_list != None and 'request_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
-                self.client_receive_body_size_count.labels(*labels).inc(receive_size, extra_labels)
+                self.client_receive_body_size_count.labels(*labels).inc(receive_size, extra_labels_header)
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
