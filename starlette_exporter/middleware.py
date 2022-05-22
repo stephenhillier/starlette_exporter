@@ -48,6 +48,7 @@ class PrometheusMiddleware:
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
+        always_use_int_status: bool = False,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -63,6 +64,8 @@ class PrometheusMiddleware:
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
+        self.always_use_int_status = always_use_int_status
+  
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -172,6 +175,15 @@ class PrometheusMiddleware:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
                 status_code = message['status']
+
+                if self.always_use_int_status:
+                    try:
+                        status_code = int(message["status"])
+                    except ValueError as e:
+                        logger.warning(
+                            f"always_use_int_status flag selected but failed to convert status_code to int for value: {status_code}"
+                        )
+
                 if self.optional_metrics_list != None and 'response_body_bytes' in self.optional_metrics_list or 'all' in self.optional_metrics_list:
                     nonlocal b_size
                     for message_content_length in message['headers']:

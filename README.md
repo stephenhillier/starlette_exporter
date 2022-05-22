@@ -19,14 +19,20 @@ Use the HTTP handler `handle_metrics` at path `/metrics` to expose a metrics end
 
 ## Table of Contents
 
-1. [Usage](#usage)
-    1. [Starlette](#starlette)
-    1. [FastAPI](#fastapi)
-1. [Options](#options)
-1. [Custom metrics](#custom-metrics)
-1. [Multiprocess mode (gunicorn deployments)](#multiprocess-mode-gunicorn-deployments)
-1. [Developing](#developing)
-1. [License](#license)
+- [starlette\_exporter](#starlette_exporter)
+  - [Prometheus exporter for Starlette and FastAPI](#prometheus-exporter-for-starlette-and-fastapi)
+  - [Table of Contents](#table-of-contents)
+  - [Usage](#usage)
+    - [Starlette](#starlette)
+    - [FastAPI](#fastapi)
+  - [Options](#options)
+  - [Custom Metrics](#custom-metrics)
+      - [Example:](#example)
+  - [Multiprocess mode (gunicorn deployments)](#multiprocess-mode-gunicorn-deployments)
+  - [Developing](#developing)
+  - [License](#license)
+  - [Dependencies](#dependencies)
+  - [Credits](#credits)
 
 ## Usage
 
@@ -74,9 +80,11 @@ app.add_route("/metrics", handle_metrics)
 
 `skip_paths`: accepts an optional list of paths that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
 
+`always_use_int_status`: accepts a boolean. The default value is False. If set to True the libary will attempt to convert the `status_code` value to an integer. If the conversion fails it will log a warning and use the initial value. This is useful if you use [`http.HTTStatus`](https://docs.python.org/3/library/http.html#http.HTTPStatus) in your code but want your metrics to emit only a integer status code.
+
 Example:
 ```python
-app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5], skip_paths=['/health'])
+app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5], skip_paths=['/health'], always_use_int_status=False)
 ```
 
 ## Custom Metrics
