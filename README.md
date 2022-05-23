@@ -82,16 +82,23 @@ app.add_route("/metrics", handle_metrics)
 
 `always_use_int_status`: accepts a boolean. The default value is False. If set to True the libary will attempt to convert the `status_code` value to an integer. If the conversion fails it will log a warning and use the initial value. This is useful if you use [`http.HTTStatus`](https://docs.python.org/3/library/http.html#http.HTTPStatus) in your code but want your metrics to emit only a integer status code.
 
-Example:
-```python
-app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5], skip_paths=['/health'], always_use_int_status=False)
-```
-
 `optional_metrics`: a list of pre-defined metrics that can be optionally added to the default metrics. The following optional metrics are available:
   * `response_body_size`: a counter that tracks the size of response bodies for each endpoint
 
 For optional metric examples, [see below](#optional-metrics).
 
+
+Full example:
+```python
+app.add_middleware(
+  PrometheusMiddleware,
+  app_name="hello_world",
+  prefix='myapp',
+  group_paths=True,
+  buckets=[0.1, 0.25, 0.5],
+  skip_paths=['/health'],
+  always_use_int_status=False)
+```
 
 ## Optional metrics
 
