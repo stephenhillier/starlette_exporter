@@ -87,7 +87,6 @@ app.add_route("/metrics", handle_metrics)
 
 For optional metric examples, [see below](#optional-metrics).
 
-
 Full example:
 ```python
 app.add_middleware(
