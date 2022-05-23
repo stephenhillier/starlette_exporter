@@ -74,9 +74,29 @@ app.add_route("/metrics", handle_metrics)
 
 `skip_paths`: accepts an optional list of paths that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
 
+`optional_metrics`: a list of pre-defined metrics that can be optionally added to the default metrics. The following optional metrics are available:
+  * `response_body_size`: a counter that tracks the size of response bodies for each endpoint
+
 Example:
 ```python
 app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5], skip_paths=['/health'])
+```
+
+## Optional metrics
+
+Optional metrics are pre-defined metrics that can be added to the default metrics.
+
+  * `response_body_size`: a counter that tracks the size of response bodies for each endpoint
+
+#### Example:
+
+```python
+from fastapi import FastAPI
+from starlette_exporter import PrometheusMiddleware, handle_metrics
+from starlette_exporter.optional_metrics import response_body_size
+
+app = FastAPI()
+app.add_middleware(PrometheusMiddleware, optional_metrics=[response_body_size])
 ```
 
 ## Custom Metrics

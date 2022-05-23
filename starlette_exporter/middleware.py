@@ -9,6 +9,8 @@ from starlette.requests import Request
 from starlette.routing import Route, Match, Mount
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
+from . import optional_metrics
+
 logger = logging.getLogger("exporter")
 
 
@@ -78,7 +80,7 @@ class PrometheusMiddleware:
 
     @property
     def request_response_body_size_count(self):
-        if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+        if self.optional_metrics_list != None and optional_metrics.response_body_size in self.optional_metrics_list:
             metric_name = f"{self.prefix}_requests_response_body_size_total"
             if metric_name not in PrometheusMiddleware._metrics:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
@@ -130,7 +132,9 @@ class PrometheusMiddleware:
 
         begin = time.perf_counter()
         end = None
-        if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+
+        # optional metrics
+        if self.optional_metrics_list != None and optional_metrics.response_body_size in self.optional_metrics_list:
             b_size: int = 0
 
         # Increment requests_in_progress gauge when request comes in
@@ -144,7 +148,8 @@ class PrometheusMiddleware:
             if message['type'] == 'http.response.start':
                 nonlocal status_code
                 status_code = message['status']
-                if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
+
+                if self.optional_metrics_list != None and optional_metrics.response_body_size in self.optional_metrics_list:
                     nonlocal b_size
                     for message_content_length in message['headers']:
                         if message_content_length[0].decode('utf-8') == 'content-length':
@@ -177,6 +182,10 @@ class PrometheusMiddleware:
 
             labels = [method, path, status_code, self.app_name]
 
+            # optional response body size metric
+            if self.optional_metrics_list != None and optional_metrics.response_body_size in self.optional_metrics_list:
+                self.request_response_body_size_count.labels(*labels).inc(b_size)
+
             # if we were not able to set end when the response body was written,
             # set it now.
             if end is None:
@@ -184,8 +193,6 @@ class PrometheusMiddleware:
 
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
-            if self.optional_metrics_list != None and 'response_body_size' in self.optional_metrics_list:
-                self.request_response_body_size_count.labels(*labels).inc(b_size)
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
