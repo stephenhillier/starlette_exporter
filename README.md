@@ -87,6 +87,30 @@ Example:
 app.add_middleware(PrometheusMiddleware, app_name="hello_world", group_paths=True, prefix='myapp', buckets=[0.1, 0.25, 0.5], skip_paths=['/health'], always_use_int_status=False)
 ```
 
+`optional_metrics`: a list of pre-defined metrics that can be optionally added to the default metrics. The following optional metrics are available:
+  * `response_body_size`: a counter that tracks the size of response bodies for each endpoint
+
+For optional metric examples, [see below](#optional-metrics).
+
+
+## Optional metrics
+
+Optional metrics are pre-defined metrics that can be added to the default metrics.
+
+  * `response_body_size`: the size of response bodies returned, in bytes
+  * `request_body_size`: the size of request bodies received, in bytes
+
+#### Example:
+
+```python
+from fastapi import FastAPI
+from starlette_exporter import PrometheusMiddleware, handle_metrics
+from starlette_exporter.optional_metrics import response_body_size
+
+app = FastAPI()
+app.add_middleware(PrometheusMiddleware, optional_metrics=[response_body_size, request_body_size])
+```
+
 ## Custom Metrics
 
 starlette_exporter will export all the prometheus metrics from the process, so custom metrics can be created by using the prometheus_client API.

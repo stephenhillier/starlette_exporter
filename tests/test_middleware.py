@@ -14,6 +14,7 @@ from starlette.testclient import TestClient
 
 import starlette_exporter
 from starlette_exporter import PrometheusMiddleware, handle_metrics
+from starlette_exporter.optional_metrics import response_body_size, request_body_size
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ def testapp():
         app.add_route("/metrics", handle_metrics)
 
         @app.route("/200")
-        @app.route("/200/{test_param}", methods=["GET", "OPTIONS"])
+        @app.route("/200/{test_param}", methods=["GET", "POST", "OPTIONS"])
         def normal_response(request):
             return JSONResponse({"message": "Hello World"})
 
@@ -83,10 +84,6 @@ def testapp():
         @app.route("/health")
         def healthcheck(request):
             return JSONResponse({"message": "Healthcheck route"})
-
-        @app.route("/post_204", methods=["POST"])
-        def post_200(requets):
-            return JSONResponse({"message": "post_200"})
 
         # testing routes added using Mount
         async def test_mounted_function(request):
@@ -476,7 +473,9 @@ class TestOptionalMetrics:
 
     @pytest.fixture
     def client(self, testapp):
-        return TestClient(testapp(optional_metrics=["all"]))
+        return TestClient(
+            testapp(optional_metrics=[response_body_size, request_body_size])
+        )
 
     def test_response_body_size(self, client):
         client.get("/200")
@@ -491,21 +490,20 @@ class TestOptionalMetrics:
         assert float(response_size) > 0.1
 
     def test_receive_body_size(self, client):
-        client.post("/post_204", json={"test_post": ["d", "a"]})
+        client.post("/200", json={"test_post": ["d", "a"]})
 
         metrics = client.get("/metrics").content.decode()
         rec_size_metric = [
             s
             for s in metrics.split("\n")
-            if ("starlette_request_body_bytes_total" in s and 'path="/post_204"' in s)
+            if ("starlette_request_body_bytes_total" in s and 'path="/200"' in s)
         ]
         rec_size = rec_size_metric[0].split("} ")[1]
         assert float(rec_size) > 0.1
 
 
 class TestAlwaysUseIntStatus:
-    """Tests for always_use_int_status flag
-    """
+    """Tests for always_use_int_status flag"""
 
     def test_200_with_always_use_int_status_set(self, testapp):
         """test that even though the endpoint resturns a response with HTTP status it is converted to 200"""
