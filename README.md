@@ -111,7 +111,7 @@ Optional metrics are pre-defined metrics that can be added to the default metric
 ```python
 from fastapi import FastAPI
 from starlette_exporter import PrometheusMiddleware, handle_metrics
-from starlette_exporter.optional_metrics import response_body_size
+from starlette_exporter.optional_metrics import response_body_size, request_body_size
 
 app = FastAPI()
 app.add_middleware(PrometheusMiddleware, optional_metrics=[response_body_size, request_body_size])
