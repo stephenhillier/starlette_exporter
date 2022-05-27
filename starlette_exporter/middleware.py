@@ -72,6 +72,7 @@ class PrometheusMiddleware:
         self.skip_paths = []
         if skip_paths is not None:
             self.skip_paths = skip_paths
+            print(f"skip paths: {self.skip_paths}")
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
@@ -166,6 +167,7 @@ class PrometheusMiddleware:
 
         method = request.method
         path = request.url.path
+        print(f"got path {path}")
 
         if path in self.skip_paths:
             await self.app(scope, receive, send)
