@@ -110,7 +110,7 @@ app.add_middleware(
 
 **Warning: this feature is experimental.**
 
-Most metrics have default labels including `app_name`, `method`, `path`, and `status_code`.  Additional default labels can be
+Metrics have built-in default labels including `app_name`, `method`, `path`, and `status_code`.  Additional default labels can be
 added by passing a dictionary to the `labels` arg to `PrometheusMiddleware`.  Each label's value can be either a static
 value or, optionally, a callback function.
 
