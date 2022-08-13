@@ -72,6 +72,9 @@ app.add_route("/metrics", handle_metrics)
 
 `prefix`: Sets the prefix of the exported metric names (default: `starlette`).
 
+`labels`: Optional dict containing default labels that will be added to all metrics. The values can be either a static value or a callback function that
+retrieves a value from the `Request` object. [See below](#labels) for examples.
+
 `group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`.  This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
 
 `filter_unhandled_paths`: setting this to `True` will cause the middleware to ignore requests with unhandled paths (in other words, 404 errors). This helps prevent filling up the metrics with 404 errors and/or intentially bad requests. Default is `False`.
@@ -93,11 +96,52 @@ app.add_middleware(
   PrometheusMiddleware,
   app_name="hello_world",
   prefix='myapp',
+  labels={
+      "server": os.getenv("HOSTNAME"),
+      "host": lambda r: r.headers.get("host")
+  }),
   group_paths=True,
   buckets=[0.1, 0.25, 0.5],
   skip_paths=['/health'],
-  always_use_int_status=False)
+  always_use_int_status=False,
 ```
+
+## Labels
+
+**Warning: this feature is experimental.**
+
+Most metrics have default labels including `app_name`, `method`, `path`, and `status_code`.  Additional default labels can be
+added by passing a dictionary to the `labels` arg to `PrometheusMiddleware`.  Each label's value can be either a static
+value or, optionally, a callback function.
+
+If a callback function is used, it will receive the Request instance as its argument.
+
+#### Examples:
+
+```python
+app.add_middleware(
+  PrometheusMiddleware,
+  labels={
+     "host": lambda r: r.headers.get("host")
+     "service": "api"
+    }
+```
+
+Alternatively, for header values, a convenience function is provided:
+```python
+from starlette_exporter import PrometheusMiddleware, from_header
+
+app.add_middleware(
+  PrometheusMiddleware,
+  labels={
+     "host": from_header("host")
+    }
+```
+
+For retrieving other types of values from the Request instance, use the lambda form.
+
+This functionality is experimental.  Exceptions may be raised if the label name, value or callback function is malformed. 
+Ensure that label names follow [Prometheus naming conventions](https://prometheus.io/docs/practices/naming/).
 
 ## Optional metrics
 

@@ -1,7 +1,8 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
+from collections import OrderedDict
 import time
 import logging
-from typing import Any, List, Optional, ClassVar, Dict
+from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union
 
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
@@ -16,7 +17,7 @@ logger = logging.getLogger("exporter")
 
 def get_matching_route_path(
     scope: Dict[Any, Any], routes: List[Route], route_name: Optional[str] = None
-) -> str:
+) -> Optional[str]:
     """
     Find a matching route and return its original path string
 
@@ -60,6 +61,7 @@ class PrometheusMiddleware:
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
         always_use_int_status: bool = False,
+        labels: Optional[Mapping[str, Union[str, Callable]]] = None
     ):
         self.app = app
         self.group_paths = group_paths
@@ -77,6 +79,9 @@ class PrometheusMiddleware:
             self.optional_metrics_list = optional_metrics
         self.always_use_int_status = always_use_int_status
 
+
+        self.labels = OrderedDict(labels) if labels is not None else None
+
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
     def request_count(self):
@@ -85,7 +90,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Counter(
                 metric_name,
                 "Total HTTP requests",
-                ("method", "path", "status_code", "app_name"),
+                ("method", "path", "status_code", "app_name", *self._default_label_keys()),
             )
         return PrometheusMiddleware._metrics[metric_name]
 
@@ -107,7 +112,7 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP response body bytes",
-                    ("method", "path", "status_code", "app_name"),
+                    ("method", "path", "status_code", "app_name", *self._default_label_keys()),
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -127,7 +132,7 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP request body bytes",
-                    ("method", "path", "status_code", "app_name"),
+                    ("method", "path", "status_code", "app_name", *self._default_label_keys()),
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -140,7 +145,7 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Histogram(
                 metric_name,
                 "HTTP request duration, in seconds",
-                ("method", "path", "status_code", "app_name"),
+                ("method", "path", "status_code", "app_name", *self._default_label_keys()),
                 **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -152,17 +157,46 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Gauge(
                 metric_name,
                 "Total HTTP requests currently in progress",
-                ("method", "app_name"),
+                ("method", "app_name", *self._default_label_keys()),
                 multiprocess_mode="livesum",
             )
         return PrometheusMiddleware._metrics[metric_name]
+
+    def _default_label_keys(self) -> List[str]:
+        if self.labels is None:
+            return []
+        return list(self.labels.keys())
+
+    def _default_label_values(self, request: Request):
+        if self.labels is None:
+            return []
+
+        values: List[str] = []
+
+        for k, v in self.labels.items():
+            if isinstance(v, Callable):
+                parsed_value = ""
+                # if provided a callable, try to use it on the request.
+                try:
+                    result = v(request)
+                except Exception:
+                    logger.warn(f"label function for {k} failed", exc_info=True)
+                else:
+                    parsed_value = str(result)
+                values.append(parsed_value)
+                continue
+
+            values.append(v)
+
+        return values
+        
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ["http"]:
             await self.app(scope, receive, send)
             return
 
-        request = Request(scope)
+        request = Request(scope, receive)
 
         method = request.method
         path = request.url.path
@@ -174,8 +208,10 @@ class PrometheusMiddleware:
         begin = time.perf_counter()
         end = None
 
+        default_labels = self._default_label_values(request)
+
         # Increment requests_in_progress gauge when request comes in
-        self.requests_in_progress.labels(method, self.app_name).inc()
+        self.requests_in_progress.labels(method, self.app_name, *default_labels).inc()
 
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
@@ -189,9 +225,8 @@ class PrometheusMiddleware:
             self.optional_metrics_list != None
             and optional_metrics.request_body_size in self.optional_metrics_list
         ):
-            receive_ = Request(scope, receive)
-            if receive_.headers.get("content-length"):
-                request_body_size = int(receive_.headers["content-length"])
+            if request.headers.get("content-length"):
+                request_body_size = int(request.headers["content-length"])
 
         async def wrapped_send(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -232,7 +267,7 @@ class PrometheusMiddleware:
             await self.app(scope, receive, wrapped_send)
         finally:
             # Decrement 'requests_in_progress' gauge after response sent
-            self.requests_in_progress.labels(method, self.app_name).dec()
+            self.requests_in_progress.labels(method, self.app_name, *default_labels).dec()
 
             if self.filter_unhandled_paths or self.group_paths:
                 grouped_path = self._get_router_path(scope)
@@ -247,7 +282,7 @@ class PrometheusMiddleware:
                 if self.group_paths and grouped_path is not None:
                     path = grouped_path
 
-            labels = [method, path, status_code, self.app_name]
+            labels = [method, path, status_code, self.app_name, *default_labels]
 
             # optional response body size metric
             if (

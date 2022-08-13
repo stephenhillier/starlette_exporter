@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from .middleware import PrometheusMiddleware
+from .labels import from_header
 
 
 def handle_metrics(request: Request) -> Response:
