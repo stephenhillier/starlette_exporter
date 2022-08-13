@@ -116,8 +116,6 @@ value or, optionally, a callback function.
 
 If a callback function is used, it will receive the Request instance as its argument.
 
-#### Examples:
-
 ```python
 app.add_middleware(
   PrometheusMiddleware,
@@ -127,21 +125,26 @@ app.add_middleware(
     }
 ```
 
-Alternatively, for header values, a convenience function is provided:
+This functionality is experimental.  Exceptions may be raised if the label name, value or callback function is malformed. 
+Ensure that label names follow [Prometheus naming conventions](https://prometheus.io/docs/practices/naming/).
+
+### Label helpers
+
+`from_header(key: string, allowed_values: Optional[Iterable])`:  a convenience function for using a header value as a label.
+`allowed_values` allows you to supply a list of allowed values. If supplied, header values not in the list will result in
+an empty string being returned.  This allows you to constrain the label values, reducing the risk of excessive cardinality.
+
 ```python
 from starlette_exporter import PrometheusMiddleware, from_header
 
 app.add_middleware(
   PrometheusMiddleware,
   labels={
-     "host": from_header("host")
+      "host": from_header("X-User", allowed_values=("frank", "estelle"))
     }
 ```
 
-For retrieving other types of values from the Request instance, use the lambda form.
 
-This functionality is experimental.  Exceptions may be raised if the label name, value or callback function is malformed. 
-Ensure that label names follow [Prometheus naming conventions](https://prometheus.io/docs/practices/naming/).
 
 ## Optional metrics
 
