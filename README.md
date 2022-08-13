@@ -103,7 +103,7 @@ app.add_middleware(
   group_paths=True,
   buckets=[0.1, 0.25, 0.5],
   skip_paths=['/health'],
-  always_use_int_status=False,
+  always_use_int_status=False)
 ```
 
 ## Labels
