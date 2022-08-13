@@ -592,3 +592,37 @@ class TestDefaultLabels:
             in metrics
         ), metrics
 
+    def test_from_header_allowed_values(self, testapp):
+        """test with the library-provided from_header function"""
+        labels = {
+            "foo": from_header("foo", allowed_values=("bar", "baz")), 
+            "hello": "world"
+        }
+        client = TestClient(testapp(labels=labels))
+        client.get("/200", headers={"foo": "bar"})
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="bar",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+    
+    def test_from_header_allowed_values_disallowed_value(self, testapp):
+        """test with the library-provided from_header function"""
+        labels = {
+            "foo": from_header("foo", allowed_values=("bar", "baz")), 
+            "hello": "world"
+        }
+        client = TestClient(testapp(labels=labels))
+        client.get("/200", headers={"foo": "zounds"})
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="zounds",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            not in metrics
+        ), metrics
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
