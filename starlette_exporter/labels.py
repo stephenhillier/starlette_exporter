@@ -3,7 +3,8 @@ from typing import Callable, Iterable, Optional
 
 from starlette.requests import Request
 
-def from_header(key: str, allowed_values: Optional[Iterable]=None) -> Callable:
+
+def from_header(key: str, allowed_values: Optional[Iterable] = None) -> Callable:
     """returns a function that retrieves a header value from a request.
     The returned function can be passed to the `labels` argument of PrometheusMiddleware
     to label metrics using a header value.
@@ -35,4 +36,3 @@ def from_header(key: str, allowed_values: Optional[Iterable]=None) -> Callable:
         return v
 
     return inner
-        

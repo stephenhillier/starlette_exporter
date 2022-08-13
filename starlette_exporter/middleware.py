@@ -61,7 +61,7 @@ class PrometheusMiddleware:
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
         always_use_int_status: bool = False,
-        labels: Optional[Mapping[str, Union[str, Callable]]] = None
+        labels: Optional[Mapping[str, Union[str, Callable]]] = None,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -79,7 +79,6 @@ class PrometheusMiddleware:
             self.optional_metrics_list = optional_metrics
         self.always_use_int_status = always_use_int_status
 
-
         self.labels = OrderedDict(labels) if labels is not None else None
 
     # Starlette initialises middleware multiple times, so store metrics on the class
@@ -90,7 +89,13 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Counter(
                 metric_name,
                 "Total HTTP requests",
-                ("method", "path", "status_code", "app_name", *self._default_label_keys()),
+                (
+                    "method",
+                    "path",
+                    "status_code",
+                    "app_name",
+                    *self._default_label_keys(),
+                ),
             )
         return PrometheusMiddleware._metrics[metric_name]
 
@@ -112,7 +117,13 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP response body bytes",
-                    ("method", "path", "status_code", "app_name", *self._default_label_keys()),
+                    (
+                        "method",
+                        "path",
+                        "status_code",
+                        "app_name",
+                        *self._default_label_keys(),
+                    ),
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -132,7 +143,13 @@ class PrometheusMiddleware:
                 PrometheusMiddleware._metrics[metric_name] = Counter(
                     metric_name,
                     "Total HTTP request body bytes",
-                    ("method", "path", "status_code", "app_name", *self._default_label_keys()),
+                    (
+                        "method",
+                        "path",
+                        "status_code",
+                        "app_name",
+                        *self._default_label_keys(),
+                    ),
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -145,7 +162,13 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Histogram(
                 metric_name,
                 "HTTP request duration, in seconds",
-                ("method", "path", "status_code", "app_name", *self._default_label_keys()),
+                (
+                    "method",
+                    "path",
+                    "status_code",
+                    "app_name",
+                    *self._default_label_keys(),
+                ),
                 **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -189,7 +212,6 @@ class PrometheusMiddleware:
             values.append(v)
 
         return values
-        
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ["http"]:
@@ -267,7 +289,9 @@ class PrometheusMiddleware:
             await self.app(scope, receive, wrapped_send)
         finally:
             # Decrement 'requests_in_progress' gauge after response sent
-            self.requests_in_progress.labels(method, self.app_name, *default_labels).dec()
+            self.requests_in_progress.labels(
+                method, self.app_name, *default_labels
+            ).dec()
 
             if self.filter_unhandled_paths or self.group_paths:
                 grouped_path = self._get_router_path(scope)

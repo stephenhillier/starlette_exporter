@@ -539,15 +539,13 @@ class TestAlwaysUseIntStatus:
             in metrics
         ), metrics
 
+
 class TestDefaultLabels:
     """tests for the default labels option (`labels` argument on the middleware constructor)"""
 
     def test_str_default_labels(self, testapp):
         """test setting default labels with string values"""
-        labels = {
-            "foo": "bar",
-            "hello": "world"
-        }
+        labels = {"foo": "bar", "hello": "world"}
         client = TestClient(testapp(labels=labels))
         client.get("/200")
         metrics = client.get("/metrics").content.decode()
@@ -563,10 +561,7 @@ class TestDefaultLabels:
         # set up a callable that retrieves a header value from the request
         f = lambda x: x.headers.get("foo")
 
-        labels = {
-            "foo": f,
-            "hello": "world"
-        }
+        labels = {"foo": f, "hello": "world"}
 
         client = TestClient(testapp(labels=labels))
         client.get("/200", headers={"foo": "bar"})
@@ -579,10 +574,7 @@ class TestDefaultLabels:
 
     def test_from_header(self, testapp):
         """test with the library-provided from_header function"""
-        labels = {
-            "foo": from_header("foo"), 
-            "hello": "world"
-        }
+        labels = {"foo": from_header("foo"), "hello": "world"}
         client = TestClient(testapp(labels=labels))
         client.get("/200", headers={"foo": "bar"})
         metrics = client.get("/metrics").content.decode()
@@ -595,8 +587,8 @@ class TestDefaultLabels:
     def test_from_header_allowed_values(self, testapp):
         """test with the library-provided from_header function"""
         labels = {
-            "foo": from_header("foo", allowed_values=("bar", "baz")), 
-            "hello": "world"
+            "foo": from_header("foo", allowed_values=("bar", "baz")),
+            "hello": "world",
         }
         client = TestClient(testapp(labels=labels))
         client.get("/200", headers={"foo": "bar"})
@@ -606,12 +598,12 @@ class TestDefaultLabels:
             """starlette_requests_total{app_name="starlette",foo="bar",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
             in metrics
         ), metrics
-    
+
     def test_from_header_allowed_values_disallowed_value(self, testapp):
         """test with the library-provided from_header function"""
         labels = {
-            "foo": from_header("foo", allowed_values=("bar", "baz")), 
-            "hello": "world"
+            "foo": from_header("foo", allowed_values=("bar", "baz")),
+            "hello": "world",
         }
         client = TestClient(testapp(labels=labels))
         client.get("/200", headers={"foo": "zounds"})
