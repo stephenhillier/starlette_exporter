@@ -6,6 +6,7 @@ setup(
     author="Stephen Hillier",
     author_email="stephenhillier@gmail.com",
     packages=["starlette_exporter"],
+    package_data={"starlette_exporter": ["py.typed"]},
     license="Apache License 2.0",
     url="https://github.com/stephenhillier/starlette_exporter",
     description="Prometheus metrics exporter for Starlette applications.",
