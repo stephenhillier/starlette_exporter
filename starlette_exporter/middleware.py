@@ -12,7 +12,9 @@ from starlette.types import ASGIApp, Message, Receive, Send, Scope
 logger = logging.getLogger("exporter")
 
 
-def get_matching_route_path(scope: Dict, routes: List[Route], route_name: Optional[str] = None) -> str:
+def get_matching_route_path(
+    scope: Dict, routes: List[Route], route_name: Optional[str] = None
+) -> str:
     """
     Find a matching route and return its original path string
 
@@ -22,39 +24,49 @@ def get_matching_route_path(scope: Dict, routes: List[Route], route_name: Option
     """
     for route in routes:
         match, child_scope = route.matches(scope)
-        if match == Match.FULL:
+        # Look for a full route match.
+        # If the middleware is configured to collect metrics on unhandled methods (e.g. 405 Method
+        # Not Allowed errors), also accept partial matches.
+        if match == Match.FULL or match == Match.PARTIAL:
             route_name = route.path
             child_scope = {**scope, **child_scope}
             if isinstance(route, Mount) and route.routes:
-                child_route_name = get_matching_route_path(child_scope, route.routes, route_name)
+                child_route_name = get_matching_route_path(
+                    child_scope, route.routes, route_name
+                )
                 if child_route_name is None:
                     route_name = None
                 else:
                     route_name += child_route_name
             return route_name
-        elif match == Match.PARTIAL and route_name is None:
-            return route.path
 
 
 class PrometheusMiddleware:
-    """ Middleware that collects Prometheus metrics for each request.
-        Use in conjuction with the Prometheus exporter endpoint handler.
+    """Middleware that collects Prometheus metrics for each request.
+    Use in conjuction with the Prometheus exporter endpoint handler.
     """
+
     _metrics: ClassVar[Dict[str, MetricWrapperBase]] = {}
 
     def __init__(
-        self, app: ASGIApp, group_paths: bool = False, app_name: str = "starlette",
-        prefix: str = "starlette", buckets: Optional[List[str]] = None,
+        self,
+        app: ASGIApp,
+        group_paths: bool = False,
+        app_name: str = "starlette",
+        prefix: str = "starlette",
+        buckets: Optional[List[str]] = None,
         filter_unhandled_paths: bool = False,
+        filter_unhandled_methods: bool = True,
     ):
         self.app = app
         self.group_paths = group_paths
         self.app_name = app_name
         self.prefix = prefix
         self.filter_unhandled_paths = filter_unhandled_paths
+        self.filter_unhandled_methods = filter_unhandled_methods
         self.kwargs = {}
         if buckets is not None:
-            self.kwargs['buckets'] = buckets
+            self.kwargs["buckets"] = buckets
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -88,7 +100,7 @@ class PrometheusMiddleware:
                 metric_name,
                 "Total HTTP requests currently in progress",
                 ("method", "app_name"),
-                multiprocess_mode="livesum"
+                multiprocess_mode="livesum",
             )
         return PrometheusMiddleware._metrics[metric_name]
 
@@ -112,11 +124,11 @@ class PrometheusMiddleware:
         status_code = 500
 
         async def wrapped_send(message: Message) -> None:
-            if message['type'] == 'http.response.start':
+            if message["type"] == "http.response.start":
                 nonlocal status_code
-                status_code = message['status']
+                status_code = message["status"]
 
-            if message['type'] == 'http.response.body':
+            if message["type"] == "http.response.body":
                 nonlocal end
                 end = time.perf_counter()
 
@@ -151,8 +163,7 @@ class PrometheusMiddleware:
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
 
-    @staticmethod
-    def _get_router_path(scope: Scope) -> Optional[str]:
+    def _get_router_path(self, scope: Scope) -> Optional[str]:
         """Returns the original router path (with url param names) for given request."""
         if not (scope.get("endpoint", None) and scope.get("router", None)):
             return None
