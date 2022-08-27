@@ -7,7 +7,7 @@ from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import Route, Match, Mount
+from starlette.routing import BaseRoute, Match, Mount
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
 from . import optional_metrics
@@ -16,7 +16,9 @@ logger = logging.getLogger("exporter")
 
 
 def get_matching_route_path(
-    scope: Dict[Any, Any], routes: List[Route], route_name: Optional[str] = None
+    scope: Dict[Any, Any],
+    routes: List[BaseRoute],
+    route_name: Optional[str] = None,
 ) -> Optional[str]:
     """
     Find a matching route and return its original path string
@@ -28,9 +30,17 @@ def get_matching_route_path(
     for route in routes:
         match, child_scope = route.matches(scope)
         if match == Match.FULL:
-            route_name = route.path
-            child_scope = {**scope, **child_scope}
+            # set route name
+            route_name = getattr(route, "path", None)
+            if route_name is None:
+                return None
+
+            # for routes of type `Mount`, the base route name may not
+            # be the complete path (it may represent the path to the
+            # mounted router). If this is a mounted route, descend into it to
+            # get the complete path.
             if isinstance(route, Mount) and route.routes:
+                child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope, route.routes, route_name
                 )
@@ -40,7 +50,9 @@ def get_matching_route_path(
                     route_name += child_route_name
             return route_name
         elif match == Match.PARTIAL and route_name is None:
-            route_name = route.path
+            route_name = getattr(route, "path", None)
+
+    return None
 
 
 class PrometheusMiddleware:
@@ -197,7 +209,7 @@ class PrometheusMiddleware:
         values: List[str] = []
 
         for k, v in self.labels.items():
-            if isinstance(v, Callable):
+            if callable(v):
                 parsed_value = ""
                 # if provided a callable, try to use it on the request.
                 try:
@@ -312,6 +324,7 @@ class PrometheusMiddleware:
             if (
                 self.optional_metrics_list != None
                 and optional_metrics.response_body_size in self.optional_metrics_list
+                and self.response_body_size_count is not None
             ):
                 self.response_body_size_count.labels(*labels).inc(response_body_size)
 
@@ -319,6 +332,7 @@ class PrometheusMiddleware:
             if (
                 self.optional_metrics_list != None
                 and optional_metrics.request_body_size in self.optional_metrics_list
+                and self.request_body_size_count is not None
             ):
                 self.request_body_size_count.labels(*labels).inc(request_body_size)
 
@@ -346,13 +360,15 @@ class PrometheusMiddleware:
 
         base_scope = {
             "type": scope.get("type"),
-            "path": root_path + scope.get("path"),
+            "path": root_path + scope.get("path", ""),
             "path_params": scope.get("path_params", {}),
             "method": scope.get("method"),
         }
 
         try:
-            path = get_matching_route_path(base_scope, scope.get("router").routes)
+            path = get_matching_route_path(
+                base_scope, getattr(scope.get("router"), "routes")
+            )
             return path
         except:
             # unhandled path
