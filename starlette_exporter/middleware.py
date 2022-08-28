@@ -346,7 +346,8 @@ class PrometheusMiddleware:
             self.request_count.labels(*labels).inc()
             self.request_time.labels(*labels).observe(end - begin)
 
-    def _get_router_path(self, scope: Scope) -> Optional[str]:
+    @staticmethod
+    def _get_router_path(scope: Scope) -> Optional[str]:
         """Returns the original router path (with url param names) for given request."""
         if not (scope.get("endpoint", None) and scope.get("router", None)):
             return None
