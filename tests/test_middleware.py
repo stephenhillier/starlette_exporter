@@ -235,10 +235,10 @@ class TestMiddleware:
         )
 
     def test_mounted_path_invalid_method(self, testapp):
-        """ test incorrect method when filter_unhandled_paths is True """
+        """test incorrect method when filter_unhandled_paths is True"""
         client = TestClient(testapp(filter_unhandled_paths=True))
-        client.post('/mounted/test')
-        metrics = client.get('/metrics').content.decode()
+        client.post("/mounted/test")
+        metrics = client.get("/metrics").content.decode()
         assert (
             """starlette_requests_total{app_name="starlette",method="POST",path="/mounted/test",status_code="405"} 1.0"""
             in metrics
@@ -433,12 +433,12 @@ class TestMiddlewareGroupedPaths:
         )
 
     def test_methods_post(self, client):
-        """ test that an endpoint that is registered for multiple HTTP methods works (POST) """
+        """test that an endpoint that is registered for multiple HTTP methods works (POST)"""
         try:
-            client.post('/test_methods')
+            client.post("/test_methods")
         except:
             pass
-        metrics = client.get('/metrics').content.decode()
+        metrics = client.get("/metrics").content.decode()
 
         assert (
             """starlette_requests_total{app_name="starlette",method="POST",path="/test_methods",status_code="200"} 1.0"""
@@ -446,12 +446,12 @@ class TestMiddlewareGroupedPaths:
         )
 
     def test_methods_get(self, client):
-        """ test that an endpoint that is registered for multiple HTTP methods works (POST) """
+        """test that an endpoint that is registered for multiple HTTP methods works (POST)"""
         try:
-            client.get('/test_methods')
+            client.get("/test_methods")
         except:
             pass
-        metrics = client.get('/metrics').content.decode()
+        metrics = client.get("/metrics").content.decode()
 
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/test_methods",status_code="200"} 1.0"""
@@ -459,16 +459,29 @@ class TestMiddlewareGroupedPaths:
         )
 
     def test_methods_invalid_method(self, client):
-        """ test that an endpoint that is registered for multiple HTTP methods works (POST) """
+        """test that an endpoint that is registered for multiple HTTP methods works (POST)"""
         try:
-            client.put('/test_methods')
+            client.put("/test_methods")
         except:
             pass
-        metrics = client.get('/metrics').content.decode()
+        metrics = client.get("/metrics").content.decode()
 
         assert (
             """starlette_requests_total{app_name="starlette",method="PUT",path="/test_methods",status_code="405"} 1.0"""
             in metrics
+        )
+
+    def test_methods_arbitrary_method(self, client):
+        """test that the `method` label won't accept arbitrary junk data"""
+        try:
+            client.request("ZOUNDS", url="/test_methods")
+        except:
+            pass
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="ZOUNDS",path="/test_methods",status_code="405"} 1.0"""
+            not in metrics
         )
 
     def test_histogram(self, client):
