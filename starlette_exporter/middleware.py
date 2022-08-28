@@ -29,7 +29,11 @@ def get_matching_route_path(
     """
     for route in routes:
         match, child_scope = route.matches(scope)
-        if match == Match.FULL:
+        # Look for a full route match.
+        # If the middleware is configured to collect metrics on unhandled methods (e.g. 405 Method
+        # Not Allowed errors), also accept partial matches.
+        if match == Match.FULL or match == Match.PARTIAL:
+
             # set route name
             route_name = getattr(route, "path", None)
             if route_name is None:
@@ -49,8 +53,6 @@ def get_matching_route_path(
                 else:
                     route_name += child_route_name
             return route_name
-        elif match == Match.PARTIAL and route_name is None:
-            route_name = getattr(route, "path", None)
 
     return None
 
