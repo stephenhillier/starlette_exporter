@@ -19,20 +19,21 @@ Use the HTTP handler `handle_metrics` at path `/metrics` to expose a metrics end
 
 ## Table of Contents
 
-- [starlette\_exporter](#starlette_exporter)
-  - [Prometheus exporter for Starlette and FastAPI](#prometheus-exporter-for-starlette-and-fastapi)
-  - [Table of Contents](#table-of-contents)
-  - [Usage](#usage)
-    - [Starlette](#starlette)
-    - [FastAPI](#fastapi)
-  - [Options](#options)
-  - [Custom Metrics](#custom-metrics)
-      - [Example:](#example)
-  - [Multiprocess mode (gunicorn deployments)](#multiprocess-mode-gunicorn-deployments)
-  - [Developing](#developing)
-  - [License](#license)
-  - [Dependencies](#dependencies)
-  - [Credits](#credits)
+* [starlette_exporter](#starlette_exporter)
+  * [Prometheus exporter for Starlette and FastAPI](#prometheus-exporter-for-starlette-and-fastapi)
+  * [Table of Contents](#table-of-contents)
+  * [Usage](#usage)
+    * [Starlette](#starlette)
+    * [FastAPI](#fastapi)
+  * [Options](#options)
+  * [Labels](#labels)
+  * [Exemplars](#exemplars)
+  * [Custom Metrics](#custom-metrics)
+  * [Multiprocess mode (gunicorn deployments)](#multiprocess-mode-gunicorn-deployments)
+  * [Developing](#developing)
+  * [License](#license)
+  * [Dependencies](#dependencies)
+  * [Credits](#credits)
 
 ## Usage
 
@@ -48,7 +49,7 @@ from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 app = Starlette()
 app.add_middleware(PrometheusMiddleware)
-app.add_route("/metrics", handle_metrics)
+app.add_route("/metrics", openmetrics_handler)
 
 ...
 ```
@@ -61,7 +62,7 @@ from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 app = FastAPI()
 app.add_middleware(PrometheusMiddleware)
-app.add_route("/metrics", handle_metrics)
+app.add_route("/metrics", openmetrics_handler)
 
 ...
 ```
@@ -75,7 +76,9 @@ app.add_route("/metrics", handle_metrics)
 `labels`: Optional dict containing default labels that will be added to all metrics. The values can be either a static value or a callback function that
 retrieves a value from the `Request` object. [See below](#labels) for examples.
 
-`group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`.  This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
+`exemplars`: Optional dict containing label/value pairs. The "value" should be callable that returns the desired value at runtime.
+
+`group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`. This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
 
 `filter_unhandled_paths`: setting this to `True` will cause the middleware to ignore requests with unhandled paths (in other words, 404 errors). This helps prevent filling up the metrics with 404 errors and/or intentially bad requests. Default is `False`.
 
@@ -86,11 +89,13 @@ retrieves a value from the `Request` object. [See below](#labels) for examples.
 `always_use_int_status`: accepts a boolean. The default value is False. If set to True the libary will attempt to convert the `status_code` value to an integer. If the conversion fails it will log a warning and use the initial value. This is useful if you use [`http.HTTStatus`](https://docs.python.org/3/library/http.html#http.HTTPStatus) in your code but want your metrics to emit only a integer status code.
 
 `optional_metrics`: a list of pre-defined metrics that can be optionally added to the default metrics. The following optional metrics are available:
-  * `response_body_size`: a counter that tracks the size of response bodies for each endpoint
+
+* `response_body_size`: a counter that tracks the size of response bodies for each endpoint
 
 For optional metric examples, [see below](#optional-metrics).
 
 Full example:
+
 ```python
 app.add_middleware(
   PrometheusMiddleware,
@@ -102,13 +107,14 @@ app.add_middleware(
   group_paths=True,
   buckets=[0.1, 0.25, 0.5],
   skip_paths=['/health'],
-  always_use_int_status=False)
+  always_use_int_status=False),
+  exemplars={"trace_id": get_trace_id}  # function that returns a trace id
 ```
 
 ## Labels
 
-The included metrics have built-in default labels such as `app_name`, `method`, `path`, and `status_code`.  Additional default labels can be
-added by passing a dictionary to the `labels` arg to `PrometheusMiddleware`.  Each label's value can be either a static
+The included metrics have built-in default labels such as `app_name`, `method`, `path`, and `status_code`. Additional default labels can be
+added by passing a dictionary to the `labels` arg to `PrometheusMiddleware`. Each label's value can be either a static
 value or, optionally, a callback function. The built-in default label names are reserved and cannot be reused.
 
 If a callback function is used, it will receive the Request instance as its argument.
@@ -127,10 +133,10 @@ values are constrained (see [this writeup from Grafana on cardinality](https://g
 
 ### Label helpers
 
-**`from_header(key: string, allowed_values: Optional[Iterable])`**:  a convenience function for using a header value as a label.
+**`from_header(key: string, allowed_values: Optional[Iterable])`**: a convenience function for using a header value as a label.
 
 `allowed_values` allows you to supply a list of allowed values. If supplied, header values not in the list will result in
-an empty string being returned.  This allows you to constrain the label values, reducing the risk of excessive cardinality.
+an empty string being returned. This allows you to constrain the label values, reducing the risk of excessive cardinality.
 
 Do not use headers that could contain unconstrained values (e.g. user id) or user-supplied values.
 
@@ -144,16 +150,41 @@ app.add_middleware(
     }
 ```
 
+## Exemplars
 
+Exemplars are used for labeling histogram observations or counter increments with a trace id. This allows adding
+trace ids to your charts (for example, latency graphs could include traces corresponding to various latency buckets).
+
+To add exemplars to `starlette_exporter` metrics, pass a dict to the PrometheusMiddleware class with label as well as
+a callback function that returns a string (typically the current trace id).
+
+**Example:**
+
+```python
+# must use `handle_openmetrics` instead of `handle_metrics` for exemplars to appear in /metrics output.
+from starlette_exporter import PrometheusMiddleware, handle_openmetrics
+
+app.add_middleware(
+  PrometheusMiddleware,
+  exemplars={"trace_id": get_trace_id}  # supply your own callback function
+)
+
+app.add_route("/metrics", handle_openmetrics)
+```
+
+Exemplars are only supported by the openmetrics-text exposition format. A new `handle_openmetrics` handler function is provided
+(see above example).
+
+For more information, see the [Grafana exemplar documentation](https://grafana.com/docs/grafana/latest/fundamentals/exemplars/).
 
 ## Optional metrics
 
 Optional metrics are pre-defined metrics that can be added to the default metrics.
 
-  * `response_body_size`: the size of response bodies returned, in bytes
-  * `request_body_size`: the size of request bodies received, in bytes
+* `response_body_size`: the size of response bodies returned, in bytes
+* `request_body_size`: the size of request bodies received, in bytes
 
-#### Example:
+**Example**:
 
 ```python
 from fastapi import FastAPI
@@ -168,7 +199,7 @@ app.add_middleware(PrometheusMiddleware, optional_metrics=[response_body_size, r
 
 starlette_exporter will export all the prometheus metrics from the process, so custom metrics can be created by using the prometheus_client API.
 
-#### Example:
+**Example**:
 
 ```python
 from prometheus_client import Counter
@@ -209,10 +240,9 @@ pytest tests
 
 Code released under the [Apache License, Version 2.0](./LICENSE).
 
-
 ## Dependencies
 
-https://github.com/prometheus/client_python
+https://github.com/prometheus/client_python (>= 0.12)
 
 https://github.com/encode/starlette
 

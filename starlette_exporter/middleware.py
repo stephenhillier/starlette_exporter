@@ -74,6 +74,7 @@ class PrometheusMiddleware:
         optional_metrics: Optional[List[str]] = None,
         always_use_int_status: bool = False,
         labels: Optional[Mapping[str, Union[str, Callable]]] = None,
+        exemplars: Optional[Callable] = None,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -92,6 +93,7 @@ class PrometheusMiddleware:
         self.always_use_int_status = always_use_int_status
 
         self.labels = OrderedDict(labels) if labels is not None else None
+        self.exemplars = exemplars
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -320,13 +322,21 @@ class PrometheusMiddleware:
 
             labels = [method, path, status_code, self.app_name, *default_labels]
 
+            # optional extra arguments to be passed as kwargs to observations
+            # note: only used for histogram observations and counters to support exemplars
+            extra = {}
+            if self.exemplars:
+                extra["exemplar"] = self.exemplars()
+
             # optional response body size metric
             if (
                 self.optional_metrics_list != None
                 and optional_metrics.response_body_size in self.optional_metrics_list
                 and self.response_body_size_count is not None
             ):
-                self.response_body_size_count.labels(*labels).inc(response_body_size)
+                self.response_body_size_count.labels(*labels).inc(
+                    response_body_size, **extra
+                )
 
             # optional request body size metric
             if (
@@ -334,15 +344,17 @@ class PrometheusMiddleware:
                 and optional_metrics.request_body_size in self.optional_metrics_list
                 and self.request_body_size_count is not None
             ):
-                self.request_body_size_count.labels(*labels).inc(request_body_size)
+                self.request_body_size_count.labels(*labels).inc(
+                    request_body_size, **extra
+                )
 
             # if we were not able to set end when the response body was written,
             # set it now.
             if end is None:
                 end = time.perf_counter()
 
-            self.request_count.labels(*labels).inc()
-            self.request_time.labels(*labels).observe(end - begin)
+            self.request_count.labels(*labels).inc(**extra)
+            self.request_time.labels(*labels).observe(end - begin, **extra)
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
