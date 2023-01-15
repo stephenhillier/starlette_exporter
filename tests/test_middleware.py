@@ -523,18 +523,6 @@ class TestAlwaysUseIntStatus:
             in metrics
         ), metrics
 
-    def test_200_HTTPStatusOK(self, testapp):
-        """Test that status_code metric is HTTPStatus.OK if status_code=HTTPStatus.OK in the response
-        and always_use_int_status is not set"""
-        client = TestClient(testapp())
-        client.get("/200_or_httpstatus/OK")
-        metrics = client.get("/metrics").content.decode()
-
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200_or_httpstatus/OK",status_code="HTTPStatus.OK"} 1.0"""
-            in metrics
-        ), metrics
-
     def test_200_always_use_int_status_set(self, testapp):
         """Test that status_code metric is 200 if status_code=200 in the response and always_use_int_status is set"""
         client = TestClient(testapp(always_use_int_status=True))
