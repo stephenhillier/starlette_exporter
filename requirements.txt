@@ -3,3 +3,4 @@ starlette==0.23.1
 requests==2.28.2
 aiofiles==22.1.0
 pytest==6.2.4
+httpx==0.23.3
