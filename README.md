@@ -86,7 +86,7 @@ retrieves a value from the `Request` object. [See below](#labels) for examples.
 
 `skip_paths`: accepts an optional list of paths that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
 
-`always_use_int_status`: accepts a boolean. The default value is False. If set to True the libary will attempt to convert the `status_code` value to an integer. If the conversion fails it will log a warning and use the initial value. This is useful if you use [`http.HTTStatus`](https://docs.python.org/3/library/http.html#http.HTTPStatus) in your code but want your metrics to emit only a integer status code.
+`always_use_int_status`: accepts a boolean. The default value is False. If set to True the libary will attempt to convert the `status_code` value to an integer (e.g. if you are using HTTPStatus, HTTPStatus.OK will become 200 for all metrics).
 
 `optional_metrics`: a list of pre-defined metrics that can be optionally added to the default metrics. The following optional metrics are available:
 
