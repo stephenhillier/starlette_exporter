@@ -76,7 +76,7 @@ app.add_route("/metrics", openmetrics_handler)
 `labels`: Optional dict containing default labels that will be added to all metrics. The values can be either a static value or a callback function that
 retrieves a value from the `Request` object. [See below](#labels) for examples.
 
-`exemplars`: Optional dict containing label/value pairs. The "value" should be callable that returns the desired value at runtime.
+`exemplars`: Optional dict containing label/value pairs. The "value" should be a callback function that returns the desired value at runtime.
 
 `group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`. This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
 
