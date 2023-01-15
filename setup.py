@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="starlette_exporter",
-    version="0.14.0",
+    version="0.15.0",
     author="Stephen Hillier",
     author_email="stephenhillier@gmail.com",
     packages=["starlette_exporter"],
@@ -12,5 +12,5 @@ setup(
     description="Prometheus metrics exporter for Starlette applications.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    install_requires=["prometheus_client", "starlette"],
+    install_requires=["prometheus_client>=0.12", "starlette"],
 )

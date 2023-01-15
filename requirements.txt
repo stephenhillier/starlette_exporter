@@ -1,5 +1,6 @@
-prometheus-client==0.7.1
-starlette==0.12.9
-requests==2.22.0
-aiofiles==0.7.0
+prometheus-client==0.15.0
+starlette==0.23.1
+requests==2.28.2
+aiofiles==22.1.0
 pytest==6.2.4
+httpx==0.23.3

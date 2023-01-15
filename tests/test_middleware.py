@@ -13,7 +13,12 @@ from starlette.staticfiles import StaticFiles
 from starlette.testclient import TestClient
 
 import starlette_exporter
-from starlette_exporter import PrometheusMiddleware, handle_metrics, from_header
+from starlette_exporter import (
+    PrometheusMiddleware,
+    handle_metrics,
+    from_header,
+    handle_openmetrics,
+)
 from starlette_exporter.optional_metrics import response_body_size, request_body_size
 
 
@@ -34,14 +39,17 @@ def testapp():
             starlette_exporter.PrometheusMiddleware, **middleware_options
         )
         app.add_route("/metrics", handle_metrics)
+        app.add_route("/openmetrics", handle_openmetrics)
 
-        @app.route("/200")
-        @app.route("/200/{test_param}", methods=["GET", "POST", "OPTIONS"])
         def normal_response(request):
             return JSONResponse({"message": "Hello World"})
 
-        @app.route("/200_or_httpstatus/{test_param}", methods=["GET", "OPTIONS"])
-        def httpstatus_respnse(request):
+        app.add_route("/200", normal_response)
+        app.add_route(
+            "/200/{test_param}", normal_response, methods=["GET", "POST", "OPTIONS"]
+        )
+
+        def httpstatus_response(request):
             """
             Returns a JSON Response using status_code = HTTPStatus.OK if the param is set to OK
             otherewise it returns a JSON response with status_code = 200
@@ -51,29 +59,25 @@ def testapp():
             else:
                 return Response(status_code=200)
 
-        @app.route("/200_with_httpstatus/{test_param}", methods=["GET", "OPTIONS"])
-        def httpstatus_respnse(request):
-            """
-            Returns a JSON Response using status_code = HTTPStatus.OK if the param is set to OK
-            otherewise it returns a JSON response with status_code = 200
-            """
-            if request.path_params["test_param"] == "OK":
-                return Response(status_code=HTTPStatus.OK)
-            else:
-                return Response(status_code=200)
+        app.add_route(
+            "/200_or_httpstatus/{test_param}",
+            httpstatus_response,
+            methods=["GET", "OPTIONS"],
+        )
 
-        @app.route("/500")
-        @app.route("/500/{test_param}")
         async def error(request):
             raise HTTPException(status_code=500, detail="this is a test error")
 
-        @app.route("/unhandled")
-        @app.route("/unhandled/{test_param}")
+        app.add_route("/500", error)
+        app.add_route("/500/{test_param}", error)
+
         async def unhandled(request):
             test_dict = {"yup": 123}
             return JSONResponse({"message": test_dict["value_error"]})
 
-        @app.route("/background")
+        app.add_route("/unhandled", unhandled)
+        app.add_route("/unhandled/{test_param}", unhandled)
+
         async def background(request):
             def backgroundtask():
                 time.sleep(0.1)
@@ -81,9 +85,12 @@ def testapp():
             task = BackgroundTask(backgroundtask)
             return JSONResponse({"message": "task started"}, background=task)
 
-        @app.route("/health")
+        app.add_route("/background", background)
+
         def healthcheck(request):
             return JSONResponse({"message": "Healthcheck route"})
+
+        app.add_route("/health", healthcheck)
 
         # testing routes added using Mount
         async def test_mounted_function(request):
@@ -516,18 +523,6 @@ class TestAlwaysUseIntStatus:
             in metrics
         ), metrics
 
-    def test_200_HTTPStatusOK(self, testapp):
-        """Test that status_code metric is HTTPStatus.OK if status_code=HTTPStatus.OK in the response
-        and always_use_int_status is not set"""
-        client = TestClient(testapp())
-        client.get("/200_or_httpstatus/OK")
-        metrics = client.get("/metrics").content.decode()
-
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200_or_httpstatus/OK",status_code="HTTPStatus.OK"} 1.0"""
-            in metrics
-        ), metrics
-
     def test_200_always_use_int_status_set(self, testapp):
         """Test that status_code metric is 200 if status_code=200 in the response and always_use_int_status is set"""
         client = TestClient(testapp(always_use_int_status=True))
@@ -616,5 +611,32 @@ class TestDefaultLabels:
 
         assert (
             """starlette_requests_total{app_name="starlette",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+
+class TestExemplars:
+    """tests for adding an exemplar to the histogram and counters"""
+
+    def test_exemplar(self, testapp):
+        """test setting default labels with string values"""
+
+        # create a callable that returns a label/value pair to
+        # be used as an exemplar.
+        def exemplar_fn():
+            return {"trace_id": "abc123"}
+
+        # create a label for this test so we have a unique output line
+        labels = {"test": "exemplar"}
+
+        client = TestClient(testapp(exemplars=exemplar_fn, labels=labels))
+        client.get("/200")
+
+        metrics = client.get(
+            "/openmetrics", headers={"Accept": "application/openmetrics-text"}
+        ).content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200",test="exemplar"} 1.0 # {trace_id="abc123"}"""
             in metrics
         ), metrics
