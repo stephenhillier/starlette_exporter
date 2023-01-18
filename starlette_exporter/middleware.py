@@ -2,7 +2,7 @@
 from collections import OrderedDict
 import time
 import logging
-from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union
+from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union, Sequence
 
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
@@ -68,7 +68,7 @@ class PrometheusMiddleware:
         group_paths: bool = False,
         app_name: str = "starlette",
         prefix: str = "starlette",
-        buckets: Optional[List[str]] = None,
+        buckets: Optional[Sequence[Union[float, str]]] = None,
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
