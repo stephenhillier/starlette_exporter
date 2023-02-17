@@ -49,7 +49,7 @@ from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 app = Starlette()
 app.add_middleware(PrometheusMiddleware)
-app.add_route("/metrics", openmetrics_handler)
+app.add_route("/metrics", handle_metrics)
 
 ...
 ```
@@ -62,7 +62,7 @@ from starlette_exporter import PrometheusMiddleware, handle_metrics
 
 app = FastAPI()
 app.add_middleware(PrometheusMiddleware)
-app.add_route("/metrics", openmetrics_handler)
+app.add_route("/metrics", handle_metrics)
 
 ...
 ```
