@@ -1,3 +1,9 @@
+__all__ = [
+    'PrometheusMiddleware',
+    'from_header',
+    'handle_metrics',
+]
+
 import os
 from prometheus_client import (
     generate_latest,
