@@ -108,7 +108,7 @@ app.add_middleware(
   buckets=[0.1, 0.25, 0.5],
   skip_paths=['/health'],
   always_use_int_status=False),
-  exemplars={"trace_id": get_trace_id}  # function that returns a trace id
+  exemplars=lambda: {"trace_id": get_trace_id}  # function that returns a trace id
 ```
 
 ## Labels
@@ -166,7 +166,7 @@ from starlette_exporter import PrometheusMiddleware, handle_openmetrics
 
 app.add_middleware(
   PrometheusMiddleware,
-  exemplars={"trace_id": get_trace_id}  # supply your own callback function
+  exemplars=lambda: {"trace_id": get_trace_id}  # supply your own callback function
 )
 
 app.add_route("/metrics", handle_openmetrics)
