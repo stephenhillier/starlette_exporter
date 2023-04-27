@@ -347,6 +347,13 @@ class TestMiddleware:
         metrics = client.get("/metrics").content.decode()
         assert """path="/health""" not in metrics
 
+    def test_skip_methods(self, testapp):
+        """test that requests doesn't appear in the counter"""
+        client = TestClient(testapp(skip_methods=["POST"]))
+        client.post("/200")
+        metrics = client.get("/metrics").content.decode()
+        assert """path="/200""" not in metrics
+
 
 class TestMiddlewareGroupedPaths:
     """tests for group_paths option (using named parameters to group endpoint metrics with path params together)"""

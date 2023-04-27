@@ -71,6 +71,7 @@ class PrometheusMiddleware:
         buckets: Optional[Sequence[Union[float, str]]] = None,
         filter_unhandled_paths: bool = False,
         skip_paths: Optional[List[str]] = None,
+        skip_methods: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
         always_use_int_status: bool = False,
         labels: Optional[Mapping[str, Union[str, Callable]]] = None,
@@ -87,6 +88,9 @@ class PrometheusMiddleware:
         self.skip_paths = []
         if skip_paths is not None:
             self.skip_paths = skip_paths
+        self.skip_methods = []
+        if skip_methods is not None:
+            self.skip_methods = skip_methods
         self.optional_metrics_list = []
         if optional_metrics is not None:
             self.optional_metrics_list = optional_metrics
@@ -237,7 +241,7 @@ class PrometheusMiddleware:
         method = request.method
         path = request.url.path
 
-        if path in self.skip_paths:
+        if path in self.skip_paths or method in self.skip_methods:
             await self.app(scope, receive, send)
             return
 
