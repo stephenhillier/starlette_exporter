@@ -603,8 +603,13 @@ class TestDefaultLabels:
 
     def test_from_header_allowed_values_disallowed_value(self, testapp):
         """test with the library-provided from_header function"""
+
+        async def async_bar(request):
+            return "bar"
+
         labels = {
             "foo": from_header("foo", allowed_values=("bar", "baz")),
+            "bar": async_bar,
             "hello": "world",
         }
         client = TestClient(testapp(labels=labels))
@@ -612,12 +617,12 @@ class TestDefaultLabels:
         metrics = client.get("/metrics").content.decode()
 
         assert (
-            """starlette_requests_total{app_name="starlette",foo="zounds",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",bar="bar",foo="zounds",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
             not in metrics
         ), metrics
 
         assert (
-            """starlette_requests_total{app_name="starlette",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",bar="bar",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
             in metrics
         ), metrics
 

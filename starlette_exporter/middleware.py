@@ -2,6 +2,7 @@
 from collections import OrderedDict
 import time
 import logging
+from inspect import iscoroutine
 from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union, Sequence
 
 from prometheus_client import Counter, Histogram, Gauge
@@ -208,7 +209,7 @@ class PrometheusMiddleware:
             return []
         return list(self.labels.keys())
 
-    def _default_label_values(self, request: Request):
+    async def _default_label_values(self, request: Request):
         if self.labels is None:
             return []
 
@@ -220,6 +221,8 @@ class PrometheusMiddleware:
                 # if provided a callable, try to use it on the request.
                 try:
                     result = v(request)
+                    if iscoroutine(result):
+                        result = await result
                 except Exception:
                     logger.warn(f"label function for {k} failed", exc_info=True)
                 else:
@@ -248,7 +251,7 @@ class PrometheusMiddleware:
         begin = time.perf_counter()
         end = None
 
-        default_labels = self._default_label_values(request)
+        default_labels = await self._default_label_values(request)
 
         # Increment requests_in_progress gauge when request comes in
         self.requests_in_progress.labels(method, self.app_name, *default_labels).inc()
