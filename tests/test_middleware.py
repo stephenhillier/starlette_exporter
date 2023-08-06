@@ -1,14 +1,13 @@
 import time
 from http import HTTPStatus
 
-import aiofiles
 import pytest
 from prometheus_client import REGISTRY
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException
-from starlette.responses import JSONResponse, PlainTextResponse, Response
-from starlette.routing import Mount, Route, Router
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.testclient import TestClient
 
@@ -254,8 +253,8 @@ class TestMiddleware:
 
         assert """path="/mounted""" not in metrics
 
-    def test_mounted_path_unhandled(self, testapp):
-        """test an unhandled path that will be partially matched at the mounted base path"""
+    def test_mounted_path_unhandled_grouped(self, testapp):
+        """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""
         client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
         client.get("/mounted/unhandled/123")
         metrics = client.get("/metrics").content.decode()
@@ -574,6 +573,25 @@ class TestDefaultLabels:
             in metrics
         ), metrics
 
+    def test_async_callable(self, testapp):
+        """test that we can use an async callable to populate label values"""
+
+        async def async_bar(request):
+            return "bar"
+
+        labels = {
+            "bar": async_bar,
+            "hello": "world",
+        }
+        client = TestClient(testapp(labels=labels))
+        client.get("/200")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",bar="bar",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
     def test_from_header(self, testapp):
         """test with the library-provided from_header function"""
         labels = {"foo": from_header("foo"), "hello": "world"}
@@ -604,12 +622,8 @@ class TestDefaultLabels:
     def test_from_header_allowed_values_disallowed_value(self, testapp):
         """test with the library-provided from_header function"""
 
-        async def async_bar(request):
-            return "bar"
-
         labels = {
             "foo": from_header("foo", allowed_values=("bar", "baz")),
-            "bar": async_bar,
             "hello": "world",
         }
         client = TestClient(testapp(labels=labels))
@@ -617,12 +631,12 @@ class TestDefaultLabels:
         metrics = client.get("/metrics").content.decode()
 
         assert (
-            """starlette_requests_total{app_name="starlette",bar="bar",foo="zounds",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",foo="zounds",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
             not in metrics
         ), metrics
 
         assert (
-            """starlette_requests_total{app_name="starlette",bar="bar",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
             in metrics
         ), metrics
 
