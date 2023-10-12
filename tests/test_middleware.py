@@ -16,6 +16,7 @@ from starlette_exporter import (
     PrometheusMiddleware,
     handle_metrics,
     from_header,
+    from_response_header,
     handle_openmetrics,
 )
 from starlette_exporter.optional_metrics import response_body_size, request_body_size
@@ -40,8 +41,8 @@ def testapp():
         app.add_route("/metrics", handle_metrics)
         app.add_route("/openmetrics", handle_openmetrics)
 
-        def normal_response(request):
-            return JSONResponse({"message": "Hello World"})
+        def normal_response(_):
+            return JSONResponse({"message": "Hello World"}, headers={"foo": "baz"})
 
         app.add_route("/200", normal_response)
         app.add_route(
@@ -632,6 +633,72 @@ class TestDefaultLabels:
 
         assert (
             """starlette_requests_total{app_name="starlette",foo="zounds",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            not in metrics
+        ), metrics
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+    def test_from_response_header(self, testapp):
+        """test with the library-provided from_response_header function"""
+        labels = {"foo": from_response_header("foo"), "hello": "world"}
+        client = TestClient(testapp(labels=labels))
+        client.get("/200")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="baz",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+    def test_from_response_header_default(self, testapp):
+        """test with the library-provided from_response_header function, with a missing header
+        (testing the default value)"""
+        labels = {
+            "foo": from_response_header("x-missing-header", default="yo"),
+            "hello": "world",
+        }
+        client = TestClient(testapp(labels=labels))
+        client.get("/200")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="yo",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+    def test_from_response_header_allowed_values(self, testapp):
+        """test with the library-provided from_response_header function, with a header value
+        that matches an allowed value."""
+        labels = {
+            "foo": from_response_header("foo", allowed_values=("bar", "baz")),
+            "hello": "world",
+        }
+        client = TestClient(testapp(labels=labels))
+        client.get("/200")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="baz",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+    def test_from_response_header_allowed_values_disallowed(self, testapp):
+        """test with the library-provided from_response_header function, with a header
+        value that does not match any of the allowed_values"""
+
+        labels = {
+            "foo": from_response_header("foo", allowed_values=("bar", "bam")),
+            "hello": "world",
+        }
+        client = TestClient(testapp(labels=labels))
+        client.get("/200", headers={"foo": "zounds"})
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="baz",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
             not in metrics
         ), metrics
 
