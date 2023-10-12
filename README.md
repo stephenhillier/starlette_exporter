@@ -159,6 +159,7 @@ app.add_middleware(
   PrometheusMiddleware,
   labels={
       "host": from_header("X-Internal-Org", allowed_values=("accounting", "marketing", "product"))
+      "cache": from_response_header("X-FastAPI-Cache", allowed_values=("hit", "miss"))
     }
 ```
 
