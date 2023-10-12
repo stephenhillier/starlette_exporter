@@ -136,12 +136,21 @@ values are constrained (see [this writeup from Grafana on cardinality](https://g
 
 ### Label helpers
 
-**`from_header(key: string, allowed_values: Optional[Iterable])`**: a convenience function for using a header value as a label.
+**`from_header(key: string, allowed_values: Optional[Iterable] = None, default: str = "")`**: a convenience function for using a header value as a label.
 
 `allowed_values` allows you to supply a list of allowed values. If supplied, header values not in the list will result in
 an empty string being returned. This allows you to constrain the label values, reducing the risk of excessive cardinality.
 
+`default`: the default value if the header does not exist.
+
 Do not use headers that could contain unconstrained values (e.g. user id) or user-supplied values.
+
+
+**`from_response_header(key: str, allowed_values: Optional[Iterable] = None, default: str = "")`**: a helper
+function that extracts a value from a response header. This may be useful if you are using a middleware
+or decorator that populates a header.
+
+The same options (and warnings) apply as the `from_header` function.
 
 ```python
 from starlette_exporter import PrometheusMiddleware, from_header

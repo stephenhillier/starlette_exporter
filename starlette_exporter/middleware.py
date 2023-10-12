@@ -3,13 +3,25 @@ from collections import OrderedDict
 import time
 import logging
 from inspect import iscoroutine
-from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union, Sequence
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    Optional,
+    ClassVar,
+    Dict,
+    Union,
+    Sequence,
+)
 
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
 from starlette.routing import BaseRoute, Match, Mount
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
+
+from starlette_exporter.labels import ResponseHeaderLabel
 
 from . import optional_metrics
 
@@ -97,10 +109,23 @@ class PrometheusMiddleware:
             self.optional_metrics_list = optional_metrics
         self.always_use_int_status = always_use_int_status
 
-        self.labels = OrderedDict(labels) if labels is not None else None
         self.exemplars = exemplars
 
+        # split labels into request and response labels.
+        # response labels will be evaluated while the response is
+        # written.
+        self.request_labels = OrderedDict({})
+        self.response_labels = OrderedDict({})
+
+        if labels is not None:
+            for k, v in labels.items():
+                if isinstance(v, ResponseHeaderLabel):
+                    self.response_labels[k] = v
+                else:
+                    self.request_labels[k] = v
+
     # Starlette initialises middleware multiple times, so store metrics on the class
+
     @property
     def request_count(self):
         metric_name = f"{self.prefix}_requests_total"
@@ -113,7 +138,8 @@ class PrometheusMiddleware:
                     "path",
                     "status_code",
                     "app_name",
-                    *self._default_label_keys(),
+                    *self.request_labels.keys(),
+                    *self.response_labels.keys(),
                 ),
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -128,7 +154,7 @@ class PrometheusMiddleware:
 
         """
         if (
-            self.optional_metrics_list != None
+            self.optional_metrics_list is not None
             and optional_metrics.response_body_size in self.optional_metrics_list
         ):
             metric_name = f"{self.prefix}_response_body_bytes_total"
@@ -141,7 +167,8 @@ class PrometheusMiddleware:
                         "path",
                         "status_code",
                         "app_name",
-                        *self._default_label_keys(),
+                        *self.request_labels.keys(),
+                        *self.response_labels.keys(),
                     ),
                 )
             return PrometheusMiddleware._metrics[metric_name]
@@ -154,7 +181,7 @@ class PrometheusMiddleware:
         Optional metric tracking the received content-lengths of request bodies
         """
         if (
-            self.optional_metrics_list != None
+            self.optional_metrics_list is not None
             and optional_metrics.request_body_size in self.optional_metrics_list
         ):
             metric_name = f"{self.prefix}_request_body_bytes_total"
@@ -167,7 +194,8 @@ class PrometheusMiddleware:
                         "path",
                         "status_code",
                         "app_name",
-                        *self._default_label_keys(),
+                        *self.request_labels.keys(),
+                        *self.response_labels.keys(),
                     ),
                 )
             return PrometheusMiddleware._metrics[metric_name]
@@ -186,7 +214,8 @@ class PrometheusMiddleware:
                     "path",
                     "status_code",
                     "app_name",
-                    *self._default_label_keys(),
+                    *self.request_labels.keys(),
+                    *self.response_labels.keys(),
                 ),
                 **self.kwargs,
             )
@@ -199,23 +228,15 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Gauge(
                 metric_name,
                 "Total HTTP requests currently in progress",
-                ("method", "app_name", *self._default_label_keys()),
+                ("method", "app_name", *self.request_labels.keys()),
                 multiprocess_mode="livesum",
             )
         return PrometheusMiddleware._metrics[metric_name]
 
-    def _default_label_keys(self) -> List[str]:
-        if self.labels is None:
-            return []
-        return list(self.labels.keys())
-
-    async def _default_label_values(self, request: Request):
-        if self.labels is None:
-            return []
-
+    async def _request_label_values(self, request: Request) -> List[str]:
         values: List[str] = []
 
-        for k, v in self.labels.items():
+        for k, v in self.request_labels.items():
             if callable(v):
                 parsed_value = ""
                 # if provided a callable, try to use it on the request.
@@ -231,6 +252,32 @@ class PrometheusMiddleware:
                 continue
 
             values.append(v)
+
+        return values
+
+    def _response_label_values(self, message: Message) -> List[str]:
+        values: List[str] = []
+
+        if not self.response_labels:
+            return values
+
+        headers = {
+            k.decode("utf-8"): v.decode("utf-8")
+            for (k, v) in message.get("headers", ())
+        }
+
+        for k, v in self.response_labels.items():
+            if callable(v):
+                parsed_value = ""
+                # if provided a callable, try to use it on the request.
+                try:
+                    result = v(headers)
+                except Exception:
+                    logger.warn(f"label function for {k} failed", exc_info=True)
+                else:
+                    parsed_value = str(result)
+                values.append(parsed_value)
+
 
         return values
 
@@ -251,21 +298,24 @@ class PrometheusMiddleware:
         begin = time.perf_counter()
         end = None
 
-        default_labels = await self._default_label_values(request)
+        request_labels = await self._request_label_values(request)
 
         # Increment requests_in_progress gauge when request comes in
-        self.requests_in_progress.labels(method, self.app_name, *default_labels).inc()
+        self.requests_in_progress.labels(method, self.app_name, *request_labels).inc()
 
         # Default status code used when the application does not return a valid response
         # or an unhandled exception occurs.
         status_code = 500
+
+        # custom response label values, to be populated when response is written.
+        response_labels = []
 
         # optional request and response body size metrics
         response_body_size: int = 0
 
         request_body_size: int = 0
         if (
-            self.optional_metrics_list != None
+            self.optional_metrics_list is not None
             and optional_metrics.request_body_size in self.optional_metrics_list
         ):
             if request.headers.get("content-length"):
@@ -276,17 +326,20 @@ class PrometheusMiddleware:
                 nonlocal status_code
                 status_code = message["status"]
 
+                nonlocal response_labels
+                response_labels = self._response_label_values(message)
+
                 if self.always_use_int_status:
                     try:
                         status_code = int(message["status"])
-                    except ValueError as e:
+                    except ValueError:
                         logger.warning(
                             f"always_use_int_status flag selected but failed to convert status_code to int for value: {status_code}"
                         )
 
                 # find response body size for optional metric
                 if (
-                    self.optional_metrics_list != None
+                    self.optional_metrics_list is not None
                     and optional_metrics.response_body_size
                     in self.optional_metrics_list
                 ):
@@ -311,7 +364,7 @@ class PrometheusMiddleware:
         finally:
             # Decrement 'requests_in_progress' gauge after response sent
             self.requests_in_progress.labels(
-                method, self.app_name, *default_labels
+                method, self.app_name, *request_labels
             ).dec()
 
             if self.filter_unhandled_paths or self.group_paths:
@@ -327,7 +380,14 @@ class PrometheusMiddleware:
                 if self.group_paths and grouped_path is not None:
                     path = grouped_path
 
-            labels = [method, path, status_code, self.app_name, *default_labels]
+            labels = [
+                method,
+                path,
+                status_code,
+                self.app_name,
+                *request_labels,
+                *response_labels,
+            ]
 
             # optional extra arguments to be passed as kwargs to observations
             # note: only used for histogram observations and counters to support exemplars
@@ -337,7 +397,7 @@ class PrometheusMiddleware:
 
             # optional response body size metric
             if (
-                self.optional_metrics_list != None
+                self.optional_metrics_list is not None
                 and optional_metrics.response_body_size in self.optional_metrics_list
                 and self.response_body_size_count is not None
             ):
@@ -347,7 +407,7 @@ class PrometheusMiddleware:
 
             # optional request body size metric
             if (
-                self.optional_metrics_list != None
+                self.optional_metrics_list is not None
                 and optional_metrics.request_body_size in self.optional_metrics_list
                 and self.request_body_size_count is not None
             ):
