@@ -258,18 +258,20 @@ class PrometheusMiddleware:
     def _response_label_values(self, message: Message) -> List[str]:
         values: List[str] = []
 
+        # bail if no response labels were defined by the user
         if not self.response_labels:
             return values
 
+        # create a dict of headers to make it easy to find keys
         headers = {
             k.decode("utf-8"): v.decode("utf-8")
             for (k, v) in message.get("headers", ())
         }
 
         for k, v in self.response_labels.items():
-            if callable(v):
+            # currently only ResponseHeaderLabel supported
+            if isinstance(v, ResponseHeaderLabel):
                 parsed_value = ""
-                # if provided a callable, try to use it on the request.
                 try:
                     result = v(headers)
                 except Exception:
