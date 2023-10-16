@@ -40,7 +40,7 @@ def get_matching_route_path(
             # be the complete path (it may represent the path to the
             # mounted router). If this is a mounted route, descend into it to
             # get the complete path.
-            if isinstance(route, Mount) and route.routes:
+            if hasattr(route, "routes"):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope, route.routes, route_name
