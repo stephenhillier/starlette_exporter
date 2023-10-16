@@ -382,6 +382,7 @@ class PrometheusMiddleware:
             "path": root_path + scope.get("path", ""),
             "path_params": scope.get("path_params", {}),
             "method": scope.get("method"),
+            "headers": scope.get("headers", {}),
         }
 
         try:
