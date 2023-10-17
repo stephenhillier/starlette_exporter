@@ -36,11 +36,11 @@ def get_matching_route_path(
             if route_name is None:
                 return None
 
-            # for routes of type `Mount`, the base route name may not
+            # for routes of type `BaseRoute`, the base route name may not
             # be the complete path (it may represent the path to the
             # mounted router). If this is a mounted route, descend into it to
             # get the complete path.
-            if hasattr(route, "routes"):
+            if isinstance(route, BaseRoute) and getattr(route, "routes", None):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope, route.routes, route_name
