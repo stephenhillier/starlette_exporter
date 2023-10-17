@@ -558,8 +558,3 @@ class TestExemplars:
             """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200",test="exemplar"} 1.0 # {trace_id="abc123"}"""
             in metrics
         ), metrics
-
-
-if __name__ == '__main__':
-    import unittest
-    unittest.main()
