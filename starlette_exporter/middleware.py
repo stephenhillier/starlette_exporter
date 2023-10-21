@@ -256,9 +256,7 @@ class PrometheusMiddleware:
         # Increment requests_in_progress gauge when request comes in
         self.requests_in_progress.labels(method, self.app_name, *default_labels).inc()
 
-        # Default status code used when the application does not return a valid response
-        # or an unhandled exception occurs.
-        status_code = 500
+        status_code = None
 
         # optional request and response body size metrics
         response_body_size: int = 0
@@ -308,6 +306,9 @@ class PrometheusMiddleware:
 
         try:
             await self.app(scope, receive, wrapped_send)
+        except Exception:
+            status_code = 500
+            raise
         finally:
             # Decrement 'requests_in_progress' gauge after response sent
             self.requests_in_progress.labels(
@@ -327,6 +328,14 @@ class PrometheusMiddleware:
                 if self.group_paths and grouped_path is not None:
                     path = grouped_path
 
+            if status_code is None:
+                request = Request(scope, receive)
+                if await request.is_disconnected():
+                    # In case no response was returned and the client is disconnected, 499 is reported as status code.
+                    status_code = 499
+                else:
+                    logger.error("Unexpected error: Application did not return a valid response")
+                    status_code = 500
             labels = [method, path, status_code, self.app_name, *default_labels]
 
             # optional extra arguments to be passed as kwargs to observations
