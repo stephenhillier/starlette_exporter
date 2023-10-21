@@ -2,6 +2,7 @@ import time
 from http import HTTPStatus
 
 import pytest
+from prometheus_client import CollectorRegistry
 from prometheus_client import REGISTRY
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
@@ -37,8 +38,13 @@ def testapp():
         app.add_middleware(
             starlette_exporter.PrometheusMiddleware, **middleware_options
         )
-        app.add_route("/metrics", handle_metrics)
-        app.add_route("/openmetrics", handle_openmetrics)
+        if middleware_options.get("registry") is None:
+            app.add_route("/metrics", handle_metrics)
+            app.add_route("/openmetrics", handle_openmetrics)
+        else:
+            handler = starlette_exporter.MetricsHandler(middleware_options.get("registry"))
+            app.add_route("/metrics", handler.handle_metrics)
+            app.add_route("/openmetrics", handler.handle_openmetrics)
 
         def normal_response(request):
             return JSONResponse({"message": "Hello World"})
@@ -666,3 +672,20 @@ class TestExemplars:
             """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200",test="exemplar"} 1.0 # {trace_id="abc123"}"""
             in metrics
         ), metrics
+class TestCustomRegistry:
+    """tests for adding an exemplar to the histogram and counters"""
+
+    def test_custom_registry(self, testapp):
+        registry = CollectorRegistry(auto_describe=True)
+        client = TestClient(testapp(registry=registry))
+        client.get("/200")
+
+        metrics = client.get(
+            "/openmetrics", headers={"Accept": "application/openmetrics-text"}
+        ).content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"""
+            in metrics
+        ), metrics
+        assert registry is not REGISTRY

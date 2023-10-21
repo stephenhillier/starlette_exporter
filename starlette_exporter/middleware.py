@@ -5,7 +5,9 @@ import logging
 from inspect import iscoroutine
 from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union, Sequence
 
+from prometheus_client import CollectorRegistry
 from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import REGISTRY
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
 from starlette.routing import BaseRoute, Match, Mount
@@ -77,6 +79,7 @@ class PrometheusMiddleware:
         always_use_int_status: bool = False,
         labels: Optional[Mapping[str, Union[str, Callable]]] = None,
         exemplars: Optional[Callable] = None,
+        registry: Optional[CollectorRegistry] = REGISTRY,
     ):
         self.app = app
         self.group_paths = group_paths
@@ -99,6 +102,7 @@ class PrometheusMiddleware:
 
         self.labels = OrderedDict(labels) if labels is not None else None
         self.exemplars = exemplars
+        self.registry = registry
 
     # Starlette initialises middleware multiple times, so store metrics on the class
     @property
@@ -115,6 +119,7 @@ class PrometheusMiddleware:
                     "app_name",
                     *self._default_label_keys(),
                 ),
+                registry=self.registry
             )
         return PrometheusMiddleware._metrics[metric_name]
 
@@ -143,6 +148,7 @@ class PrometheusMiddleware:
                         "app_name",
                         *self._default_label_keys(),
                     ),
+                    registry=self.registry
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -169,6 +175,7 @@ class PrometheusMiddleware:
                         "app_name",
                         *self._default_label_keys(),
                     ),
+                    registry=self.registry
                 )
             return PrometheusMiddleware._metrics[metric_name]
         else:
@@ -188,6 +195,7 @@ class PrometheusMiddleware:
                     "app_name",
                     *self._default_label_keys(),
                 ),
+                registry=self.registry,
                 **self.kwargs,
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -201,6 +209,7 @@ class PrometheusMiddleware:
                 "Total HTTP requests currently in progress",
                 ("method", "app_name", *self._default_label_keys()),
                 multiprocess_mode="livesum",
+                registry=self.registry,
             )
         return PrometheusMiddleware._metrics[metric_name]
 
