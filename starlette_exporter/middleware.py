@@ -8,7 +8,7 @@ from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import BaseRoute, Match, Mount
+from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
 from . import optional_metrics
