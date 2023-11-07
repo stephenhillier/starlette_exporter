@@ -8,7 +8,7 @@ from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import BaseRoute, Match, Mount
+from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
 from . import optional_metrics
@@ -36,11 +36,11 @@ def get_matching_route_path(
             if route_name is None:
                 return None
 
-            # for routes of type `Mount`, the base route name may not
+            # for routes of type `BaseRoute`, the base route name may not
             # be the complete path (it may represent the path to the
             # mounted router). If this is a mounted route, descend into it to
             # get the complete path.
-            if isinstance(route, Mount) and route.routes:
+            if isinstance(route, BaseRoute) and getattr(route, "routes", None):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope, route.routes, route_name
@@ -391,6 +391,7 @@ class PrometheusMiddleware:
             "path": root_path + scope.get("path", ""),
             "path_params": scope.get("path_params", {}),
             "method": scope.get("method"),
+            "headers": scope.get("headers", {}),
         }
 
         try:
