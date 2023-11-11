@@ -2,8 +2,19 @@
 from collections import OrderedDict
 import time
 import logging
+import warnings
 from inspect import iscoroutine
-from typing import Any, Callable, List, Mapping, Optional, ClassVar, Dict, Union, Sequence
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    Optional,
+    ClassVar,
+    Dict,
+    Union,
+    Sequence,
+)
 
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_client.metrics import MetricWrapperBase
@@ -13,7 +24,7 @@ from starlette.types import ASGIApp, Message, Receive, Send, Scope
 
 from . import optional_metrics
 
-logger = logging.getLogger("exporter")
+logger = logging.getLogger("starlette_exporter")
 
 
 def get_matching_route_path(
@@ -43,7 +54,7 @@ def get_matching_route_path(
             if isinstance(route, BaseRoute) and getattr(route, "routes", None):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
-                    child_scope, route.routes, route_name
+                    child_scope, getattr(route, "routes"), route_name
                 )
                 if child_route_name is None:
                     route_name = None
@@ -79,10 +90,18 @@ class PrometheusMiddleware:
         exemplars: Optional[Callable] = None,
     ):
         self.app = app
-        self.group_paths = group_paths
         self.app_name = app_name
         self.prefix = prefix
+
+        if group_paths is False or filter_unhandled_paths is False:
+            warnings.warn(
+                "group_paths and filter_unhandled_paths will change defaults from False to True in the next release. "
+                "See https://github.com/stephenhillier/starlette_exporter/issues/79 for more info",
+                FutureWarning,
+            )
+        self.group_paths = group_paths
         self.filter_unhandled_paths = filter_unhandled_paths
+
         self.kwargs = {}
         if buckets is not None:
             self.kwargs["buckets"] = buckets
@@ -100,7 +119,8 @@ class PrometheusMiddleware:
         self.labels = OrderedDict(labels) if labels is not None else None
         self.exemplars = exemplars
 
-    # Starlette initialises middleware multiple times, so store metrics on the class
+    # Default metrics
+
     @property
     def request_count(self):
         metric_name = f"{self.prefix}_requests_total"
@@ -128,7 +148,7 @@ class PrometheusMiddleware:
 
         """
         if (
-            self.optional_metrics_list != None
+            self.optional_metrics_list is not None
             and optional_metrics.response_body_size in self.optional_metrics_list
         ):
             metric_name = f"{self.prefix}_response_body_bytes_total"
@@ -154,7 +174,7 @@ class PrometheusMiddleware:
         Optional metric tracking the received content-lengths of request bodies
         """
         if (
-            self.optional_metrics_list != None
+            self.optional_metrics_list is not None
             and optional_metrics.request_body_size in self.optional_metrics_list
         ):
             metric_name = f"{self.prefix}_request_body_bytes_total"
@@ -263,7 +283,7 @@ class PrometheusMiddleware:
 
         request_body_size: int = 0
         if (
-            self.optional_metrics_list != None
+            self.optional_metrics_list is not None
             and optional_metrics.request_body_size in self.optional_metrics_list
         ):
             if request.headers.get("content-length"):
@@ -284,7 +304,7 @@ class PrometheusMiddleware:
 
                 # find response body size for optional metric
                 if (
-                    self.optional_metrics_list != None
+                    self.optional_metrics_list is not None
                     and optional_metrics.response_body_size
                     in self.optional_metrics_list
                 ):
@@ -334,8 +354,8 @@ class PrometheusMiddleware:
                     # In case no response was returned and the client is disconnected, 499 is reported as status code.
                     status_code = 499
                 else:
-                    logger.error("Unexpected error: Application did not return a valid response")
                     status_code = 500
+
             labels = [method, path, status_code, self.app_name, *default_labels]
 
             # optional extra arguments to be passed as kwargs to observations
@@ -346,7 +366,7 @@ class PrometheusMiddleware:
 
             # optional response body size metric
             if (
-                self.optional_metrics_list != None
+                self.optional_metrics_list is not None
                 and optional_metrics.response_body_size in self.optional_metrics_list
                 and self.response_body_size_count is not None
             ):
@@ -356,7 +376,7 @@ class PrometheusMiddleware:
 
             # optional request body size metric
             if (
-                self.optional_metrics_list != None
+                self.optional_metrics_list is not None
                 and optional_metrics.request_body_size in self.optional_metrics_list
                 and self.request_body_size_count is not None
             ):
