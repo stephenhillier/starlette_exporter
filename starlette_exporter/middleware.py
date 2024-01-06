@@ -1,26 +1,26 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
-from collections import OrderedDict
-import time
 import logging
+import time
 import warnings
+from collections import OrderedDict
 from inspect import iscoroutine
 from typing import (
     Any,
     Callable,
+    ClassVar,
+    Dict,
     List,
     Mapping,
     Optional,
-    ClassVar,
-    Dict,
-    Union,
     Sequence,
+    Union,
 )
 
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
 from starlette.routing import BaseRoute, Match
-from starlette.types import ASGIApp, Message, Receive, Send, Scope
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import optional_metrics
 
@@ -324,73 +324,78 @@ class PrometheusMiddleware:
 
             await send(message)
 
+        exception: Optional[Exception] = None
         try:
             await self.app(scope, receive, wrapped_send)
-        except Exception:
+        except Exception as e:
             status_code = 500
-            raise
-        finally:
-            # Decrement 'requests_in_progress' gauge after response sent
-            self.requests_in_progress.labels(
-                method, self.app_name, *default_labels
-            ).dec()
+            exception = e
 
-            if self.filter_unhandled_paths or self.group_paths:
-                grouped_path = self._get_router_path(scope)
+        # Decrement 'requests_in_progress' gauge after response sent
+        self.requests_in_progress.labels(
+            method, self.app_name, *default_labels
+        ).dec()
 
-                # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
-                if self.filter_unhandled_paths and grouped_path is None:
-                    return
+        if self.filter_unhandled_paths or self.group_paths:
+            grouped_path = self._get_router_path(scope)
 
-                # group_paths enables returning the original router path (with url param names)
-                # for example, when using this option, requests to /api/product/1 and /api/product/3
-                # will both be grouped under /api/product/{product_id}. See the README for more info.
-                if self.group_paths and grouped_path is not None:
-                    path = grouped_path
+            # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
+            if self.filter_unhandled_paths and grouped_path is None:
+                if exception:
+                    raise exception
+                return
 
-            if status_code is None:
-                request = Request(scope, receive)
-                if await request.is_disconnected():
-                    # In case no response was returned and the client is disconnected, 499 is reported as status code.
-                    status_code = 499
-                else:
-                    status_code = 500
+            # group_paths enables returning the original router path (with url param names)
+            # for example, when using this option, requests to /api/product/1 and /api/product/3
+            # will both be grouped under /api/product/{product_id}. See the README for more info.
+            if self.group_paths and grouped_path is not None:
+                path = grouped_path
 
-            labels = [method, path, status_code, self.app_name, *default_labels]
+        if status_code is None:
+            if await request.is_disconnected():
+                # In case no response was returned and the client is disconnected, 499 is reported as status code.
+                status_code = 499
+            else:
+                status_code = 500
 
-            # optional extra arguments to be passed as kwargs to observations
-            # note: only used for histogram observations and counters to support exemplars
-            extra = {}
-            if self.exemplars:
-                extra["exemplar"] = self.exemplars()
+        labels = [method, path, status_code, self.app_name, *default_labels]
 
-            # optional response body size metric
-            if (
-                self.optional_metrics_list is not None
-                and optional_metrics.response_body_size in self.optional_metrics_list
-                and self.response_body_size_count is not None
-            ):
-                self.response_body_size_count.labels(*labels).inc(
-                    response_body_size, **extra
-                )
+        # optional extra arguments to be passed as kwargs to observations
+        # note: only used for histogram observations and counters to support exemplars
+        extra = {}
+        if self.exemplars:
+            extra["exemplar"] = self.exemplars()
 
-            # optional request body size metric
-            if (
-                self.optional_metrics_list is not None
-                and optional_metrics.request_body_size in self.optional_metrics_list
-                and self.request_body_size_count is not None
-            ):
-                self.request_body_size_count.labels(*labels).inc(
-                    request_body_size, **extra
-                )
+        # optional response body size metric
+        if (
+            self.optional_metrics_list is not None
+            and optional_metrics.response_body_size in self.optional_metrics_list
+            and self.response_body_size_count is not None
+        ):
+            self.response_body_size_count.labels(*labels).inc(
+                response_body_size, **extra
+            )
 
-            # if we were not able to set end when the response body was written,
-            # set it now.
-            if end is None:
-                end = time.perf_counter()
+        # optional request body size metric
+        if (
+            self.optional_metrics_list is not None
+            and optional_metrics.request_body_size in self.optional_metrics_list
+            and self.request_body_size_count is not None
+        ):
+            self.request_body_size_count.labels(*labels).inc(
+                request_body_size, **extra
+            )
 
-            self.request_count.labels(*labels).inc(**extra)
-            self.request_time.labels(*labels).observe(end - begin, **extra)
+        # if we were not able to set end when the response body was written,
+        # set it now.
+        if end is None:
+            end = time.perf_counter()
+
+        self.request_count.labels(*labels).inc(**extra)
+        self.request_time.labels(*labels).observe(end - begin, **extra)
+
+        if exception:
+            raise exception
 
     @staticmethod
     def _get_router_path(scope: Scope) -> Optional[str]:
@@ -403,10 +408,11 @@ class PrometheusMiddleware:
 
         if hasattr(app, "root_path"):
             app_root_path = getattr(app, "root_path")
-            if root_path.startswith(app_root_path):
+            if app_root_path and root_path.startswith(app_root_path):
                 root_path = root_path[len(app_root_path) :]
 
         base_scope = {
+            "root_path": root_path,
             "type": scope.get("type"),
             "path": root_path + scope.get("path", ""),
             "path_params": scope.get("path_params", {}),

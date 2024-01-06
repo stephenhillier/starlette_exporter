@@ -3,6 +3,7 @@ from http import HTTPStatus
 
 import pytest
 from prometheus_client import REGISTRY
+from starlette import __version__ as starlette_version
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException
@@ -14,11 +15,11 @@ from starlette.testclient import TestClient
 import starlette_exporter
 from starlette_exporter import (
     PrometheusMiddleware,
-    handle_metrics,
     from_header,
+    handle_metrics,
     handle_openmetrics,
 )
-from starlette_exporter.optional_metrics import response_body_size, request_body_size
+from starlette_exporter.optional_metrics import request_body_size, response_body_size
 
 
 @pytest.fixture
@@ -138,16 +139,98 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_unhandled(self, client):
-        """test that an unhandled exception still gets logged in the requests counter"""
+    def test_404(self, client):
+        """test that an unknown path is handled properly"""
+        client.get("/404")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/404",status_code="404"} 1.0"""
+            in metrics
+        )
+
+    def test_404_filter(self, testapp):
+        """test that a unknown path can be excluded from metrics"""
+        client = TestClient(testapp(filter_unhandled_paths=True))
+
         try:
-            client.get("/unhandled")
+            client.get("/404")
         except:
             pass
         metrics = client.get("/metrics").content.decode()
 
+        assert "404" not in metrics
+
+    def test_unhandled(self, client):
+        """test that an unhandled exception still gets logged in the requests counter"""
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled")
+
+        metrics = client.get("/metrics").content.decode()
+
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled",status_code="500"} 1.0"""
+            in metrics
+        )
+
+    def test_ungrouped_paths(self, client):
+        """test that an endpoints parameters with group_paths=False are added to metrics"""
+
+        client.get("/200/111")
+        client.get("/500/1111")
+        client.get("/404/11111")
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled/123")
+
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200/111",status_code="200"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/500/1111",status_code="500"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/404/11111",status_code="404"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/123",status_code="500"} 1.0"""
+            in metrics
+        )
+
+    def test_custom_root_path(self, testapp):
+        """test that an unhandled exception still gets logged in the requests counter"""
+
+        client = TestClient(testapp(), root_path="/api")
+
+        client.get("/200")
+        client.get("/500")
+        client.get("/404")
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled")
+
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/api/200",status_code="200"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/api/500",status_code="500"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/api/404",status_code="404"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/api/unhandled",status_code="500"} 1.0"""
             in metrics
         )
 
@@ -214,14 +297,6 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_filter_unhandled_paths(self, testapp):
-        """test that app_name label is populated correctly"""
-        client = TestClient(testapp(filter_unhandled_paths=True))
-
-        client.get("/this_path_does_not_exist")
-        metrics = client.get("/metrics").content.decode()
-        assert "this_path_does_not_exist" not in metrics
-
     def test_mounted_path(self, testapp):
         """test that mounted paths appear even when filter_unhandled_paths is True"""
         client = TestClient(testapp(filter_unhandled_paths=True))
@@ -244,23 +319,23 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_mounted_path_unhandled(self, testapp):
+    def test_mounted_path_404(self, client):
         """test an unhandled path that will be partially matched at the mounted base path"""
+        client.get("/mounted/404")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/mounted/404",status_code="404"} 1.0"""
+            in metrics
+        )
+
+    def test_mounted_path_404_filter(self, testapp):
+        """test an unhandled path from mounted base path can be excluded from metrics"""
         client = TestClient(testapp(filter_unhandled_paths=True))
-        client.get("/mounted/unhandled/123")
+        client.get("/mounted/404")
         metrics = client.get("/metrics").content.decode()
-        assert """path="/mounted/unhandled""" not in metrics
 
-        assert """path="/mounted""" not in metrics
-
-    def test_mounted_path_unhandled_grouped(self, testapp):
-        """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""
-        client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
-        client.get("/mounted/unhandled/123")
-        metrics = client.get("/metrics").content.decode()
-        assert """path="/mounted/unhandled""" not in metrics
-
-        assert """path="/mounted""" not in metrics
+        assert "/mounted" not in metrics
 
     def test_staticfiles_path(self, testapp):
         """test a static file path"""
@@ -394,12 +469,25 @@ class TestMiddlewareGroupedPaths:
             in metrics
         )
 
-    def test_unhandled(self, client):
-        """test that an unhandled exception still gets logged in the requests counter"""
+    def test_404(self, client):
+        """test that a 404 is handled properly, even though the path won't be grouped"""
         try:
-            client.get("/unhandled/11111")
+            client.get("/404/11111")
         except:
             pass
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/404/11111",status_code="404"} 1.0"""
+            in metrics
+        )
+
+    def test_unhandled(self, client):
+        """test that an unhandled exception still gets logged in the requests counter (grouped paths)"""
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled/123")
+
         metrics = client.get("/metrics").content.decode()
 
         assert (
@@ -407,35 +495,78 @@ class TestMiddlewareGroupedPaths:
             in metrics
         )
 
+    def test_custom_root_path(self, testapp):
+        """test that custom root_path does not affect the path grouping"""
+
+        client = TestClient(testapp(group_paths=True, filter_unhandled_paths=True), root_path="/api")
+
+        client.get("/200/111")
+        client.get("/500/1111")
+        client.get("/404/123")
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled/123")
+
+        metrics = client.get("/metrics").content.decode()
+
+        starlette_version_tuple = tuple(map(int, starlette_version.split(".")))
+        if starlette_version_tuple < (0, 33):
+            # These asserts are valid only on Starlette 0.33+
+            # See https://github.com/encode/starlette/pull/2352"
+            return
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200/{test_param}",status_code="200"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/500/{test_param}",status_code="500"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/{test_param}",status_code="500"} 1.0"""
+            in metrics
+        )
+        assert "404" not in metrics
+
+    def test_mounted_path_404(self, testapp):
+        """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""
+        client = TestClient(testapp(group_paths=True))
+        client.get("/mounted/404")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/mounted/404",status_code="404"} 1.0"""
+            in metrics
+        )
+
+    def test_mounted_path_404_filter(self, testapp):
+        """test an unhandled path from mounted base path can be excluded from metrics (grouped paths)"""
+        client = TestClient(testapp(group_paths=True, filter_unhandled_paths=True))
+        client.get("/mounted/404")
+        metrics = client.get("/metrics").content.decode()
+
+        assert "/mounted" not in metrics
+
     def test_staticfiles_path(self, testapp):
         """test a static file path, with group_paths=True"""
         client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
         client.get("/static/test.txt")
         metrics = client.get("/metrics").content.decode()
-        assert 'path="/static"' in metrics
-
-    def test_404(self, client):
-        """test that a 404 is handled properly, even though the path won't be matched"""
-        try:
-            client.get("/not_found/11111")
-        except:
-            pass
-        metrics = client.get("/metrics").content.decode()
 
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/not_found/11111",status_code="404"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/static",status_code="200"} 1.0"""
             in metrics
         )
 
     def test_histogram(self, client):
         """test that histogram buckets appear after making requests"""
 
-        client.get("/200/1")
-        client.get("/500/12")
-        try:
-            client.get("/unhandled/111")
-        except:
-            pass
+        client.get("/200/111")
+        client.get("/500/1111")
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled/123")
 
         metrics = client.get("/metrics").content.decode()
 
