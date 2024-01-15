@@ -12,5 +12,5 @@ setup(
     description="Prometheus metrics exporter for Starlette applications.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    install_requires=["prometheus_client>=0.12", "starlette"],
+    install_requires=["prometheus_client>=0.12", "starlette>=0.35"],
 )
