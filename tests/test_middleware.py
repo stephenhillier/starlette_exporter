@@ -158,7 +158,7 @@ class TestMiddleware:
             pass
         metrics = client.get("/metrics").content.decode()
 
-        assert "404" not in metrics
+        assert "/404" not in metrics
 
     def test_unhandled(self, client):
         """test that an unhandled exception still gets logged in the requests counter"""
@@ -520,7 +520,7 @@ class TestMiddlewareGroupedPaths:
             """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/{test_param}",status_code="500"} 1.0"""
             in metrics
         )
-        assert "404" not in metrics
+        assert "/404" not in metrics
 
     def test_mounted_path_404(self, testapp):
         """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""

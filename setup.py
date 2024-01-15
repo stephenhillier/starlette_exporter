@@ -13,4 +13,5 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     install_requires=["prometheus_client>=0.12", "starlette>=0.35"],
+    python_requires=">=3.8",
 )
