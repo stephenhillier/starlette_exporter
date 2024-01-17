@@ -175,7 +175,8 @@ class TestMiddleware:
 
     def test_ungrouped_paths(self, testapp):
         """test that an endpoints parameters with group_paths=False are added to metrics"""
-        client = TestClient(testapp(group_paths=False, filter_unhandled_paths=False))
+
+        client = TestClient(testapp(group_paths=False))
 
         client.get("/200/111")
         client.get("/500/1111")
@@ -194,10 +195,8 @@ class TestMiddleware:
             """starlette_requests_total{app_name="starlette",method="GET",path="/500/1111",status_code="500"} 1.0"""
             in metrics
         )
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/404/11111",status_code="404"} 1.0"""
-            in metrics
-        )
+        assert "/404" not in metrics
+        
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/123",status_code="500"} 1.0"""
             in metrics
@@ -206,7 +205,7 @@ class TestMiddleware:
     def test_custom_root_path(self, testapp):
         """test that an unhandled exception still gets logged in the requests counter"""
 
-        client = TestClient(testapp(filter_unhandled_paths=False, group_paths=False), root_path="/api")
+        client = TestClient(testapp(), root_path="/api")
 
         client.get("/200")
         client.get("/500")
@@ -225,10 +224,7 @@ class TestMiddleware:
             """starlette_requests_total{app_name="starlette",method="GET",path="/500",status_code="500"} 1.0"""
             in metrics
         )
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/404",status_code="404"} 1.0"""
-            in metrics
-        )
+        assert "/404" not in metrics
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled",status_code="500"} 1.0"""
             in metrics
