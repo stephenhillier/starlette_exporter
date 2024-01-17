@@ -77,11 +77,11 @@ class PrometheusMiddleware:
     def __init__(
         self,
         app: ASGIApp,
-        group_paths: bool = False,
+        group_paths: bool = True,
         app_name: str = "starlette",
         prefix: str = "starlette",
         buckets: Optional[Sequence[Union[float, str]]] = None,
-        filter_unhandled_paths: bool = False,
+        filter_unhandled_paths: bool = True,
         skip_paths: Optional[List[str]] = None,
         skip_methods: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
@@ -92,13 +92,6 @@ class PrometheusMiddleware:
         self.app = app
         self.app_name = app_name
         self.prefix = prefix
-
-        if group_paths is False or filter_unhandled_paths is False:
-            warnings.warn(
-                "group_paths and filter_unhandled_paths will change defaults from False to True in the next release. "
-                "See https://github.com/stephenhillier/starlette_exporter/issues/79 for more info",
-                FutureWarning,
-            )
         self.group_paths = group_paths
         self.filter_unhandled_paths = filter_unhandled_paths
 
