@@ -138,8 +138,9 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_404(self, client):
-        """test that an unknown path is handled properly"""
+    def test_404_filter_unhandled_paths_off(self, testapp):
+        """test that an unknown path is captured in metrics if filter_unhandled_paths=False"""
+        client = TestClient(testapp(filter_unhandled_paths=False))
         client.get("/404")
         metrics = client.get("/metrics").content.decode()
 
@@ -148,9 +149,8 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_404_filter(self, testapp):
+    def test_404_filter(self, client):
         """test that a unknown path can be excluded from metrics"""
-        client = TestClient(testapp(filter_unhandled_paths=True))
 
         try:
             client.get("/404")
@@ -173,8 +173,9 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_ungrouped_paths(self, client):
+    def test_ungrouped_paths(self, testapp):
         """test that an endpoints parameters with group_paths=False are added to metrics"""
+        client = TestClient(testapp(group_paths=False, filter_unhandled_paths=False))
 
         client.get("/200/111")
         client.get("/500/1111")
@@ -205,7 +206,7 @@ class TestMiddleware:
     def test_custom_root_path(self, testapp):
         """test that an unhandled exception still gets logged in the requests counter"""
 
-        client = TestClient(testapp(), root_path="/api")
+        client = TestClient(testapp(filter_unhandled_paths=False, group_paths=False), root_path="/api")
 
         client.get("/200")
         client.get("/500")
@@ -318,8 +319,10 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_mounted_path_404(self, client):
-        """test an unhandled path that will be partially matched at the mounted base path"""
+    def test_mounted_path_404(self, testapp):
+        """test an unhandled path that will be partially matched at the mounted base path, if
+        filter_unhandled_paths=False"""
+        client = TestClient(testapp(filter_unhandled_paths=False))
         client.get("/mounted/404")
         metrics = client.get("/metrics").content.decode()
 
@@ -338,7 +341,7 @@ class TestMiddleware:
 
     def test_staticfiles_path(self, testapp):
         """test a static file path"""
-        client = TestClient(testapp(filter_unhandled_paths=True))
+        client = TestClient(testapp(filter_unhandled_paths=False, group_paths=False))
         client.get("/static/test.txt")
         metrics = client.get("/metrics").content.decode()
         assert """path="/static/test.txt""" in metrics
@@ -477,8 +480,7 @@ class TestMiddlewareGroupedPaths:
         metrics = client.get("/metrics").content.decode()
 
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/404/11111",status_code="404"} 1.0"""
-            in metrics
+            "/404" not in metrics
         )
 
     def test_unhandled(self, client):
@@ -497,7 +499,7 @@ class TestMiddlewareGroupedPaths:
     def test_custom_root_path(self, testapp):
         """test that custom root_path does not affect the path grouping"""
 
-        client = TestClient(testapp(group_paths=True, filter_unhandled_paths=True), root_path="/api")
+        client = TestClient(testapp(), root_path="/api")
 
         client.get("/200/111")
         client.get("/500/1111")
@@ -522,9 +524,9 @@ class TestMiddlewareGroupedPaths:
         )
         assert "/404" not in metrics
 
-    def test_mounted_path_404(self, testapp):
+    def test_mounted_path_404_unfiltered(self, testapp):
         """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""
-        client = TestClient(testapp(group_paths=True))
+        client = TestClient(testapp(group_paths=True, filter_unhandled_paths=False))
         client.get("/mounted/404")
         metrics = client.get("/metrics").content.decode()
 
@@ -543,7 +545,7 @@ class TestMiddlewareGroupedPaths:
 
     def test_staticfiles_path(self, testapp):
         """test a static file path, with group_paths=True"""
-        client = TestClient(testapp(filter_unhandled_paths=True, group_paths=True))
+        client = TestClient(testapp())
         client.get("/static/test.txt")
         metrics = client.get("/metrics").content.decode()
 
@@ -611,7 +613,7 @@ class TestOptionalMetrics:
     @pytest.fixture
     def client(self, testapp):
         return TestClient(
-            testapp(optional_metrics=[response_body_size, request_body_size])
+            testapp(optional_metrics=[response_body_size, request_body_size], filter_unhandled_paths=False, group_paths=False)
         )
 
     def test_response_body_size(self, client):
@@ -649,7 +651,7 @@ class TestAlwaysUseIntStatus:
         metrics = client.get("/metrics").content.decode()
 
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200_or_httpstatus/OK",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200_or_httpstatus/{test_param}",status_code="200"} 1.0"""
             in metrics
         ), metrics
 
