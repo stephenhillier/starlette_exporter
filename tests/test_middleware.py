@@ -3,7 +3,6 @@ from http import HTTPStatus
 
 import pytest
 from prometheus_client import REGISTRY
-from starlette import __version__ as starlette_version
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException
@@ -159,7 +158,7 @@ class TestMiddleware:
             pass
         metrics = client.get("/metrics").content.decode()
 
-        assert "404" not in metrics
+        assert "/404" not in metrics
 
     def test_unhandled(self, client):
         """test that an unhandled exception still gets logged in the requests counter"""
@@ -218,19 +217,19 @@ class TestMiddleware:
         metrics = client.get("/metrics").content.decode()
 
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/api/200",status_code="200"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
             in metrics
         )
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/api/500",status_code="500"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/500",status_code="500"} 1.0"""
             in metrics
         )
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/api/404",status_code="404"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/404",status_code="404"} 1.0"""
             in metrics
         )
         assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/api/unhandled",status_code="500"} 1.0"""
+            """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled",status_code="500"} 1.0"""
             in metrics
         )
 
@@ -509,12 +508,6 @@ class TestMiddlewareGroupedPaths:
 
         metrics = client.get("/metrics").content.decode()
 
-        starlette_version_tuple = tuple(map(int, starlette_version.split(".")))
-        if starlette_version_tuple < (0, 33):
-            # These asserts are valid only on Starlette 0.33+
-            # See https://github.com/encode/starlette/pull/2352"
-            return
-
         assert (
             """starlette_requests_total{app_name="starlette",method="GET",path="/200/{test_param}",status_code="200"} 1.0"""
             in metrics
@@ -527,7 +520,7 @@ class TestMiddlewareGroupedPaths:
             """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/{test_param}",status_code="500"} 1.0"""
             in metrics
         )
-        assert "404" not in metrics
+        assert "/404" not in metrics
 
     def test_mounted_path_404(self, testapp):
         """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""
