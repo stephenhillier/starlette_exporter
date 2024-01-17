@@ -43,7 +43,7 @@ def testapp():
         def normal_response(request):
             return JSONResponse({"message": "Hello World"})
 
-        app.add_route("/200", normal_response)
+        app.add_route("/200", normal_response, methods=["GET", "POST", "OPTIONS"])
         app.add_route(
             "/200/{test_param}", normal_response, methods=["GET", "POST", "OPTIONS"]
         )
@@ -609,7 +609,7 @@ class TestOptionalMetrics:
     @pytest.fixture
     def client(self, testapp):
         return TestClient(
-            testapp(optional_metrics=[response_body_size, request_body_size], filter_unhandled_paths=False, group_paths=False)
+            testapp(optional_metrics=[response_body_size, request_body_size])
         )
 
     def test_response_body_size(self, client):
