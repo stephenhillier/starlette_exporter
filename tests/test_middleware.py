@@ -202,34 +202,6 @@ class TestMiddleware:
             in metrics
         )
 
-    def test_custom_root_path(self, testapp):
-        """test that an unhandled exception still gets logged in the requests counter"""
-
-        client = TestClient(testapp(), root_path="/api")
-
-        client.get("/200")
-        client.get("/500")
-        client.get("/404")
-
-        with pytest.raises(KeyError, match="value_error"):
-            client.get("/unhandled")
-
-        metrics = client.get("/metrics").content.decode()
-
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200"} 1.0"""
-            in metrics
-        )
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/500",status_code="500"} 1.0"""
-            in metrics
-        )
-        assert "/404" not in metrics
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled",status_code="500"} 1.0"""
-            in metrics
-        )
-
     def test_histogram(self, client):
         """test that histogram buckets appear after making requests"""
 
@@ -492,34 +464,6 @@ class TestMiddlewareGroupedPaths:
             in metrics
         )
 
-    def test_custom_root_path(self, testapp):
-        """test that custom root_path does not affect the path grouping"""
-
-        client = TestClient(testapp(), root_path="/api")
-
-        client.get("/200/111")
-        client.get("/500/1111")
-        client.get("/404/123")
-
-        with pytest.raises(KeyError, match="value_error"):
-            client.get("/unhandled/123")
-
-        metrics = client.get("/metrics").content.decode()
-
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/200/{test_param}",status_code="200"} 1.0"""
-            in metrics
-        )
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/500/{test_param}",status_code="500"} 1.0"""
-            in metrics
-        )
-        assert (
-            """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/{test_param}",status_code="500"} 1.0"""
-            in metrics
-        )
-        assert "/404" not in metrics
-
     def test_mounted_path_404_unfiltered(self, testapp):
         """test an unhandled path that will be partially matched at the mounted base path (grouped paths)"""
         client = TestClient(testapp(group_paths=True, filter_unhandled_paths=False))
@@ -573,6 +517,63 @@ class TestMiddlewareGroupedPaths:
             """starlette_request_duration_seconds_bucket{app_name="starlette",le="0.005",method="GET",path="/unhandled/{test_param}",status_code="500"}"""
             in metrics
         )
+
+    def test_custom_root_path(self, testapp):
+        """test that custom root_path does not affect the path grouping"""
+
+        client = TestClient(testapp(skip_paths=["/health"]), root_path="/api")
+
+        client.get("/200/111")
+        client.get("/500/1111")
+        client.get("/404/123")
+
+        client.get("/api/200/111")
+        client.get("/api/500/1111")
+        client.get("/api/404/123")
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled/123")
+
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/api/unhandled/123")
+
+        client.get("/mounted/test/404")
+        client.get("/static/404")
+
+        client.get("/api/mounted/test/123")
+        client.get("/api/static/test.txt")
+
+        client.get("/health")
+        client.get("/api/health")
+
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200/{test_param}",status_code="200"} 2.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/500/{test_param}",status_code="500"} 2.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/unhandled/{test_param}",status_code="500"} 2.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/mounted/test/{item}",status_code="200"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/static",status_code="200"} 1.0"""
+            in metrics
+        )
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/static",status_code="404"} 1.0"""
+            in metrics
+        )
+        assert "/404" not in metrics
+        assert "/health" not in metrics
 
 
 class TestBackgroundTasks:

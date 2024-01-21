@@ -1,8 +1,8 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import logging
 import time
-import warnings
 from collections import OrderedDict
+from contextlib import suppress
 from inspect import iscoroutine
 from typing import (
     Any,
@@ -39,6 +39,7 @@ def get_matching_route_path(
 
     Credit to https://github.com/elastic/apm-agent-python
     """
+
     for route in routes:
         match, child_scope = route.matches(scope)
         if match == Match.FULL:
@@ -54,7 +55,9 @@ def get_matching_route_path(
             if isinstance(route, BaseRoute) and getattr(route, "routes", None):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
-                    child_scope, getattr(route, "routes"), route_name
+                    child_scope,
+                    getattr(route, "routes"),
+                    route_name,
                 )
                 if child_route_name is None:
                     route_name = None
@@ -256,6 +259,10 @@ class PrometheusMiddleware:
 
         method = request.method
         path = request.url.path
+        base_path = request.base_url.path.rstrip("/")
+
+        if base_path and path.startswith(base_path):
+            path = path[len(base_path) :]
 
         if path in self.skip_paths or method in self.skip_methods:
             await self.app(scope, receive, send)
@@ -318,6 +325,7 @@ class PrometheusMiddleware:
             await send(message)
 
         exception: Optional[Exception] = None
+        original_scope = scope.copy()
         try:
             await self.app(scope, receive, wrapped_send)
         except Exception as e:
@@ -330,7 +338,13 @@ class PrometheusMiddleware:
         ).dec()
 
         if self.filter_unhandled_paths or self.group_paths:
-            grouped_path = self._get_router_path(scope)
+            grouped_path: Optional[str] = None
+
+            endpoint = scope.get("endpoint", None)
+            router = scope.get("router", None)
+            if endpoint and router:
+                with suppress(Exception):
+                    grouped_path = get_matching_route_path(original_scope, router.routes)
 
             # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
             if self.filter_unhandled_paths and grouped_path is None:
@@ -390,36 +404,3 @@ class PrometheusMiddleware:
         if exception:
             raise exception
 
-    @staticmethod
-    def _get_router_path(scope: Scope) -> Optional[str]:
-        """Returns the original router path (with url param names) for given request."""
-        if not (scope.get("endpoint", None) and scope.get("router", None)):
-            return None
-
-        root_path = scope.get("root_path", "")
-        app = scope.get("app", {})
-
-        if hasattr(app, "root_path"):
-            app_root_path = getattr(app, "root_path")
-            if app_root_path and root_path.startswith(app_root_path):
-                root_path = root_path[len(app_root_path) :]
-
-        base_scope = {
-            "root_path": root_path,
-            "type": scope.get("type"),
-            "path": root_path + scope.get("path", ""),
-            "path_params": scope.get("path_params", {}),
-            "method": scope.get("method"),
-            "headers": scope.get("headers", {}),
-        }
-
-        try:
-            path = get_matching_route_path(
-                base_scope, getattr(scope.get("router"), "routes")
-            )
-            return path
-        except:
-            # unhandled path
-            pass
-
-        return None
