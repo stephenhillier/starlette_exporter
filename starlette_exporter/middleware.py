@@ -1,5 +1,6 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
 import logging
+import re
 import time
 from collections import OrderedDict
 from contextlib import suppress
@@ -101,9 +102,9 @@ class PrometheusMiddleware:
         self.kwargs = {}
         if buckets is not None:
             self.kwargs["buckets"] = buckets
-        self.skip_paths = []
+        self.skip_paths: List[re.Pattern] = []
         if skip_paths is not None:
-            self.skip_paths = skip_paths
+            self.skip_paths = [re.compile(path) for path in skip_paths]
         self.skip_methods = []
         if skip_methods is not None:
             self.skip_methods = skip_methods
@@ -264,7 +265,7 @@ class PrometheusMiddleware:
         if base_path and path.startswith(base_path):
             path = path[len(base_path) :]
 
-        if path in self.skip_paths or method in self.skip_methods:
+        if any(pattern.match(path) for pattern in self.skip_paths) or method in self.skip_methods:
             await self.app(scope, receive, send)
             return
 
