@@ -265,7 +265,7 @@ class PrometheusMiddleware:
         if base_path and path.startswith(base_path):
             path = path[len(base_path) :]
 
-        if any(pattern.match(path) for pattern in self.skip_paths) or method in self.skip_methods:
+        if any(pattern.fullmatch(path) for pattern in self.skip_paths) or method in self.skip_methods:
             await self.app(scope, receive, send)
             return
 

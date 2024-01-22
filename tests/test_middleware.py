@@ -392,11 +392,18 @@ class TestMiddleware:
         assert """path="/health""" not in metrics
 
     def test_skip_paths__re(self, testapp):
-        """test that requests doesn't appear in the counter"""
+        """test skip_paths using regular expression"""
         client = TestClient(testapp(skip_paths=[r"/h.*"]))
         client.get("/health")
         metrics = client.get("/metrics").content.decode()
         assert """path="/health""" not in metrics
+
+    def test_skip_paths__re_partial(self, testapp):
+        """test skip_paths using regular expression"""
+        client = TestClient(testapp(skip_paths=[r"/h"]))
+        client.get("/health")
+        metrics = client.get("/metrics").content.decode()
+        assert """path="/health""" in metrics
 
     def test_skip_methods(self, testapp):
         """test that requests doesn't appear in the counter"""
