@@ -3,6 +3,7 @@ import inspect
 import logging
 import re
 import time
+import warnings
 from collections import OrderedDict
 from contextlib import suppress
 from inspect import iscoroutine
@@ -95,11 +96,22 @@ class PrometheusMiddleware:
         always_use_int_status: bool = False,
         labels: Optional[Mapping[str, Union[str, Callable]]] = None,
         exemplars: Optional[Callable] = None,
+        group_unhandled_paths: bool = False,
     ):
         self.app = app
         self.app_name = app_name
         self.prefix = prefix
         self.group_paths = group_paths
+
+        if group_unhandled_paths and filter_unhandled_paths:
+            filter_unhandled_paths = False
+            warnings.warn(
+                "filter_unhandled_paths was set to True but has been changed to False "
+                "because group_unhandled_paths is True and these settings are mutually exclusive",
+                UserWarning,
+            )
+
+        self.group_unhandled_paths = group_unhandled_paths
         self.filter_unhandled_paths = filter_unhandled_paths
 
         self.kwargs = {}
@@ -407,7 +419,7 @@ class PrometheusMiddleware:
             else:
                 status_code = 500
 
-        if self.filter_unhandled_paths or self.group_paths:
+        if self.filter_unhandled_paths or self.group_paths or self.group_unhandled_paths:
             grouped_path: Optional[str] = None
 
             endpoint = scope.get("endpoint", None)
@@ -422,6 +434,10 @@ class PrometheusMiddleware:
                     raise exception
                 return
 
+            # group_unhandled_paths works similar to filter_unhandled_paths, but instead of
+            # removing the request from the metrics, it groups it under a single path.
+            if self.group_unhandled_paths and grouped_path is None:
+                path = "__unknown__"
 
             # group_paths enables returning the original router path (with url param names)
             # for example, when using this option, requests to /api/product/1 and /api/product/3
