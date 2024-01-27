@@ -84,7 +84,7 @@ retrieves a value from the `Request` object. [See below](#labels) for examples.
 
 `buckets`: accepts an optional list of numbers to use as histogram buckets. The default value is `None`, which will cause the library to fall back on the Prometheus defaults (currently `[0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]`).
 
-`skip_paths`: accepts an optional list of paths - or regular expressions for paths - that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
+`skip_paths`: accepts an optional list of paths, or regular expressions for paths, that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
 
 `skip_methods`: accepts an optional list of methods that will not collect metrics. The default value is `None`, which will cause the library to collect request metrics with each method. This option is useful to avoid collecting metrics on requests related to the communication description for endpoints.
 
