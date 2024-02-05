@@ -1,4 +1,5 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
+import inspect
 import logging
 import re
 import time
@@ -115,6 +116,21 @@ class PrometheusMiddleware:
 
         self.labels = OrderedDict(labels) if labels is not None else None
         self.exemplars = exemplars
+        self._exemplars_req_kw = ""
+
+        if self.exemplars:
+            # if the exemplars func has an argument annotated as Request, note its name.
+            # it will be used to inject the request when the func is called
+            exemplar_sig = inspect.signature(self.exemplars)
+            for p in exemplar_sig.parameters.values():
+                if p.annotation is Request:
+                    self._exemplars_req_kw = p.name
+                    break
+            else:
+                # if there's no parameter with a Request type annotation but there is a
+                # parameter with name "request", it will be chosen for injection
+                if "request" in exemplar_sig.parameters:
+                    self._exemplars_req_kw = "request"
 
     # Default metrics
 
@@ -372,7 +388,10 @@ class PrometheusMiddleware:
         # note: only used for histogram observations and counters to support exemplars
         extra = {}
         if self.exemplars:
-            extra["exemplar"] = self.exemplars()
+            exemplar_kwargs = {}
+            if self._exemplars_req_kw:
+                exemplar_kwargs[self._exemplars_req_kw] = request
+            extra["exemplar"] = self.exemplars(**exemplar_kwargs)
 
         # optional response body size metric
         if (
