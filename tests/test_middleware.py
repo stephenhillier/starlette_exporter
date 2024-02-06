@@ -6,6 +6,7 @@ from prometheus_client import REGISTRY
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
@@ -797,6 +798,38 @@ class TestExemplars:
 
         metrics = client.get(
             "/openmetrics", headers={"Accept": "application/openmetrics-text"}
+        ).content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="/200",status_code="200",test="exemplar"} 1.0 # {trace_id="abc123"}"""
+            in metrics
+        ), metrics
+
+    @pytest.mark.parametrize("annotated", [False, True])
+    def test_exemplar_request(self, testapp, annotated: bool) -> None:
+        """test setting exemplar with request injection"""
+
+        # create a callable that returns a label/value pair to
+        # be used as an exemplar.
+        if annotated:
+
+            def exemplar_fn(r: Request):
+                return {"trace_id": r.headers.get("trace-id", "")}
+
+        else:
+
+            def exemplar_fn(request):
+                return {"trace_id": request.headers.get("trace-id", "")}
+
+        # create a label for this test so we have a unique output line
+        labels = {"test": "exemplar"}
+
+        client = TestClient(testapp(exemplars=exemplar_fn, labels=labels))
+        client.get("/200", headers={"Trace-ID": "abc123"})
+
+        metrics = client.get(
+            "/openmetrics",
+            headers={"Accept": "application/openmetrics-text", "Trace-ID": "abc123"},
         ).content.decode()
 
         assert (
