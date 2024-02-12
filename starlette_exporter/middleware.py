@@ -86,6 +86,7 @@ class PrometheusMiddleware:
         app_name: str = "starlette",
         prefix: str = "starlette",
         buckets: Optional[Sequence[Union[float, str]]] = None,
+        group_unhandled_paths: bool = False,
         filter_unhandled_paths: bool = True,
         skip_paths: Optional[List[str]] = None,
         skip_methods: Optional[List[str]] = None,
@@ -98,6 +99,13 @@ class PrometheusMiddleware:
         self.app_name = app_name
         self.prefix = prefix
         self.group_paths = group_paths
+
+        if group_unhandled_paths and filter_unhandled_paths:
+            raise ValueError(
+                "group_unhandled_paths and filter_unhandled_paths cannot both be True"
+            )
+
+        self.group_unhandled_paths = group_unhandled_paths
         self.filter_unhandled_paths = filter_unhandled_paths
 
         self.kwargs = {}
@@ -354,7 +362,7 @@ class PrometheusMiddleware:
             method, self.app_name, *default_labels
         ).dec()
 
-        if self.filter_unhandled_paths or self.group_paths:
+        if self.filter_unhandled_paths or self.group_paths or self.group_unhandled_paths:
             grouped_path: Optional[str] = None
 
             endpoint = scope.get("endpoint", None)
@@ -374,6 +382,11 @@ class PrometheusMiddleware:
             # will both be grouped under /api/product/{product_id}. See the README for more info.
             if self.group_paths and grouped_path is not None:
                 path = grouped_path
+
+            # group_unhandled_paths works similar to filter_unhandled_paths, but instead of
+            # removing the request from the metrics, it groups it under a single path.
+            if self.group_unhandled_paths and grouped_path is None:
+                path = "__unknown__"
 
         if status_code is None:
             if await request.is_disconnected():
