@@ -407,15 +407,6 @@ class PrometheusMiddleware:
             else:
                 status_code = 500
 
-        labels = [
-                method,
-                path,
-                status_code,
-                self.app_name,
-                *request_labels,
-                *response_labels,
-            ]
-
         if self.filter_unhandled_paths or self.group_paths:
             grouped_path: Optional[str] = None
 
@@ -437,6 +428,15 @@ class PrometheusMiddleware:
             # will both be grouped under /api/product/{product_id}. See the README for more info.
             if self.group_paths and grouped_path is not None:
                 path = grouped_path
+
+        labels = [
+                method,
+                path,
+                status_code,
+                self.app_name,
+                *request_labels,
+                *response_labels,
+            ]
 
         # optional extra arguments to be passed as kwargs to observations
         # note: only used for histogram observations and counters to support exemplars

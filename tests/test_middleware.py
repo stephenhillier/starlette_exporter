@@ -303,7 +303,7 @@ class TestMiddleware:
 
     def test_mounted_path_404_filter(self, testapp):
         """test an unhandled path from mounted base path can be excluded from metrics"""
-        client = TestClient(testapp(filter_unhandled_paths=True))
+        client = TestClient(testapp())
         client.get("/mounted/404")
         metrics = client.get("/metrics").content.decode()
 
