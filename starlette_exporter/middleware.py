@@ -391,14 +391,14 @@ class PrometheusMiddleware:
         original_scope = scope.copy()
         try:
             await self.app(scope, receive, wrapped_send)
+        except Exception as e:
+            status_code = 500
+            exception = e
         finally:
             # Decrement 'requests_in_progress' gauge after response sent
             self.requests_in_progress.labels(
                 method, self.app_name, *request_labels
             ).dec()
-        except Exception as e:
-            status_code = 500
-            exception = e
 
         if status_code is None:
             if await request.is_disconnected():
@@ -437,28 +437,6 @@ class PrometheusMiddleware:
             # will both be grouped under /api/product/{product_id}. See the README for more info.
             if self.group_paths and grouped_path is not None:
                 path = grouped_path
-
-
-        # optional response body size metric
-        if (
-            self.optional_metrics_list is not None
-            and optional_metrics.response_body_size in self.optional_metrics_list
-            and self.response_body_size_count is not None
-        ):
-            self.response_body_size_count.labels(*labels).inc(
-                response_body_size, **extra
-            )
-
-        # optional request body size metric
-        if (
-            self.optional_metrics_list is not None
-            and optional_metrics.request_body_size in self.optional_metrics_list
-            and self.request_body_size_count is not None
-        ):
-            self.request_body_size_count.labels(*labels).inc(
-                request_body_size, **extra
-            )
-
 
         # optional extra arguments to be passed as kwargs to observations
         # note: only used for histogram observations and counters to support exemplars
