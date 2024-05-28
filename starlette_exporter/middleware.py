@@ -1,31 +1,34 @@
 """ Middleware for exporting Prometheus metrics using Starlette """
-from collections import OrderedDict
-import time
+import inspect
 import logging
+import re
+import time
+from collections import OrderedDict
+from contextlib import suppress
 from inspect import iscoroutine
 from typing import (
     Any,
     Callable,
+    ClassVar,
+    Dict,
     List,
     Mapping,
     Optional,
-    ClassVar,
-    Dict,
-    Union,
     Sequence,
+    Union,
 )
 
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import BaseRoute, Match, Mount
-from starlette.types import ASGIApp, Message, Receive, Send, Scope
+from starlette.routing import BaseRoute, Match
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from starlette_exporter.labels import ResponseHeaderLabel
 
 from . import optional_metrics
 
-logger = logging.getLogger("exporter")
+logger = logging.getLogger("starlette_exporter")
 
 
 def get_matching_route_path(
@@ -40,6 +43,7 @@ def get_matching_route_path(
 
     Credit to https://github.com/elastic/apm-agent-python
     """
+
     for route in routes:
         match, child_scope = route.matches(scope)
         if match == Match.FULL:
@@ -48,14 +52,16 @@ def get_matching_route_path(
             if route_name is None:
                 return None
 
-            # for routes of type `Mount`, the base route name may not
+            # for routes of type `BaseRoute`, the base route name may not
             # be the complete path (it may represent the path to the
             # mounted router). If this is a mounted route, descend into it to
             # get the complete path.
-            if isinstance(route, Mount) and route.routes:
+            if isinstance(route, BaseRoute) and getattr(route, "routes", None):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
-                    child_scope, route.routes, route_name
+                    child_scope,
+                    getattr(route, "routes"),
+                    route_name,
                 )
                 if child_route_name is None:
                     route_name = None
@@ -78,11 +84,11 @@ class PrometheusMiddleware:
     def __init__(
         self,
         app: ASGIApp,
-        group_paths: bool = False,
+        group_paths: bool = True,
         app_name: str = "starlette",
         prefix: str = "starlette",
         buckets: Optional[Sequence[Union[float, str]]] = None,
-        filter_unhandled_paths: bool = False,
+        filter_unhandled_paths: bool = True,
         skip_paths: Optional[List[str]] = None,
         skip_methods: Optional[List[str]] = None,
         optional_metrics: Optional[List[str]] = None,
@@ -91,16 +97,17 @@ class PrometheusMiddleware:
         exemplars: Optional[Callable] = None,
     ):
         self.app = app
-        self.group_paths = group_paths
         self.app_name = app_name
         self.prefix = prefix
+        self.group_paths = group_paths
         self.filter_unhandled_paths = filter_unhandled_paths
+
         self.kwargs = {}
         if buckets is not None:
             self.kwargs["buckets"] = buckets
-        self.skip_paths = []
+        self.skip_paths: List[re.Pattern] = []
         if skip_paths is not None:
-            self.skip_paths = skip_paths
+            self.skip_paths = [re.compile(path) for path in skip_paths]
         self.skip_methods = []
         if skip_methods is not None:
             self.skip_methods = skip_methods
@@ -110,6 +117,22 @@ class PrometheusMiddleware:
         self.always_use_int_status = always_use_int_status
 
         self.exemplars = exemplars
+        self._exemplars_req_kw = ""
+
+        if self.exemplars:
+            # if the exemplars func has an argument annotated as Request, note its name.
+            # it will be used to inject the request when the func is called
+            exemplar_sig = inspect.signature(self.exemplars)
+            for p in exemplar_sig.parameters.values():
+                if p.annotation is Request:
+                    self._exemplars_req_kw = p.name
+                    break
+            else:
+                # if there's no parameter with a Request type annotation but there is a
+                # parameter with name "request", it will be chosen for injection
+                if "request" in exemplar_sig.parameters:
+                    self._exemplars_req_kw = "request"
+
 
         # split labels into request and response labels.
         # response labels will be evaluated while the response is
@@ -124,6 +147,7 @@ class PrometheusMiddleware:
                 else:
                     self.request_labels[k] = v
 
+    # Default metrics
     # Starlette initialises middleware multiple times, so store metrics on the class
 
     @property
@@ -292,8 +316,12 @@ class PrometheusMiddleware:
 
         method = request.method
         path = request.url.path
+        base_path = request.base_url.path.rstrip("/")
 
-        if path in self.skip_paths or method in self.skip_methods:
+        if base_path and path.startswith(base_path):
+            path = path[len(base_path) :]
+
+        if any(pattern.fullmatch(path) for pattern in self.skip_paths) or method in self.skip_methods:
             await self.app(scope, receive, send)
             return
 
@@ -305,9 +333,7 @@ class PrometheusMiddleware:
         # Increment requests_in_progress gauge when request comes in
         self.requests_in_progress.labels(method, self.app_name, *request_labels).inc()
 
-        # Default status code used when the application does not return a valid response
-        # or an unhandled exception occurs.
-        status_code = 500
+        status_code = None
 
         # custom response label values, to be populated when response is written.
         response_labels = []
@@ -361,6 +387,8 @@ class PrometheusMiddleware:
 
             await send(message)
 
+        exception: Optional[Exception] = None
+        original_scope = scope.copy()
         try:
             await self.app(scope, receive, wrapped_send)
         finally:
@@ -368,21 +396,18 @@ class PrometheusMiddleware:
             self.requests_in_progress.labels(
                 method, self.app_name, *request_labels
             ).dec()
+        except Exception as e:
+            status_code = 500
+            exception = e
 
-            if self.filter_unhandled_paths or self.group_paths:
-                grouped_path = self._get_router_path(scope)
+        if status_code is None:
+            if await request.is_disconnected():
+                # In case no response was returned and the client is disconnected, 499 is reported as status code.
+                status_code = 499
+            else:
+                status_code = 500
 
-                # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
-                if self.filter_unhandled_paths and grouped_path is None:
-                    return
-
-                # group_paths enables returning the original router path (with url param names)
-                # for example, when using this option, requests to /api/product/1 and /api/product/3
-                # will both be grouped under /api/product/{product_id}. See the README for more info.
-                if self.group_paths and grouped_path is not None:
-                    path = grouped_path
-
-            labels = [
+        labels = [
                 method,
                 path,
                 status_code,
@@ -391,68 +416,87 @@ class PrometheusMiddleware:
                 *response_labels,
             ]
 
-            # optional extra arguments to be passed as kwargs to observations
-            # note: only used for histogram observations and counters to support exemplars
-            extra = {}
-            if self.exemplars:
-                extra["exemplar"] = self.exemplars()
+        if self.filter_unhandled_paths or self.group_paths:
+            grouped_path: Optional[str] = None
 
-            # optional response body size metric
-            if (
-                self.optional_metrics_list is not None
-                and optional_metrics.response_body_size in self.optional_metrics_list
-                and self.response_body_size_count is not None
-            ):
-                self.response_body_size_count.labels(*labels).inc(
-                    response_body_size, **extra
-                )
+            endpoint = scope.get("endpoint", None)
+            router = scope.get("router", None)
+            if endpoint and router:
+                with suppress(Exception):
+                    grouped_path = get_matching_route_path(original_scope, router.routes)
 
-            # optional request body size metric
-            if (
-                self.optional_metrics_list is not None
-                and optional_metrics.request_body_size in self.optional_metrics_list
-                and self.request_body_size_count is not None
-            ):
-                self.request_body_size_count.labels(*labels).inc(
-                    request_body_size, **extra
-                )
+            # filter_unhandled_paths removes any requests without mapped endpoint from the metrics.
+            if self.filter_unhandled_paths and grouped_path is None:
+                if exception:
+                    raise exception
+                return
 
-            # if we were not able to set end when the response body was written,
-            # set it now.
-            if end is None:
-                end = time.perf_counter()
 
-            self.request_count.labels(*labels).inc(**extra)
-            self.request_time.labels(*labels).observe(end - begin, **extra)
+            # group_paths enables returning the original router path (with url param names)
+            # for example, when using this option, requests to /api/product/1 and /api/product/3
+            # will both be grouped under /api/product/{product_id}. See the README for more info.
+            if self.group_paths and grouped_path is not None:
+                path = grouped_path
 
-    @staticmethod
-    def _get_router_path(scope: Scope) -> Optional[str]:
-        """Returns the original router path (with url param names) for given request."""
-        if not (scope.get("endpoint", None) and scope.get("router", None)):
-            return None
 
-        root_path = scope.get("root_path", "")
-        app = scope.get("app", {})
-
-        if hasattr(app, "root_path"):
-            app_root_path = getattr(app, "root_path")
-            if root_path.startswith(app_root_path):
-                root_path = root_path[len(app_root_path) :]
-
-        base_scope = {
-            "type": scope.get("type"),
-            "path": root_path + scope.get("path", ""),
-            "path_params": scope.get("path_params", {}),
-            "method": scope.get("method"),
-        }
-
-        try:
-            path = get_matching_route_path(
-                base_scope, getattr(scope.get("router"), "routes")
+        # optional response body size metric
+        if (
+            self.optional_metrics_list is not None
+            and optional_metrics.response_body_size in self.optional_metrics_list
+            and self.response_body_size_count is not None
+        ):
+            self.response_body_size_count.labels(*labels).inc(
+                response_body_size, **extra
             )
-            return path
-        except:
-            # unhandled path
-            pass
 
-        return None
+        # optional request body size metric
+        if (
+            self.optional_metrics_list is not None
+            and optional_metrics.request_body_size in self.optional_metrics_list
+            and self.request_body_size_count is not None
+        ):
+            self.request_body_size_count.labels(*labels).inc(
+                request_body_size, **extra
+            )
+
+
+        # optional extra arguments to be passed as kwargs to observations
+        # note: only used for histogram observations and counters to support exemplars
+        extra = {}
+        if self.exemplars:
+            exemplar_kwargs = {}
+            if self._exemplars_req_kw:
+                exemplar_kwargs[self._exemplars_req_kw] = request
+            extra["exemplar"] = self.exemplars(**exemplar_kwargs)
+
+        # optional response body size metric
+        if (
+            self.optional_metrics_list is not None
+            and optional_metrics.response_body_size in self.optional_metrics_list
+            and self.response_body_size_count is not None
+        ):
+            self.response_body_size_count.labels(*labels).inc(
+                response_body_size, **extra
+            )
+
+        # optional request body size metric
+        if (
+            self.optional_metrics_list is not None
+            and optional_metrics.request_body_size in self.optional_metrics_list
+            and self.request_body_size_count is not None
+        ):
+            self.request_body_size_count.labels(*labels).inc(
+                request_body_size, **extra
+            )
+
+        # if we were not able to set end when the response body was written,
+        # set it now.
+        if end is None:
+            end = time.perf_counter()
+
+        self.request_count.labels(*labels).inc(**extra)
+        self.request_time.labels(*labels).observe(end - begin, **extra)
+
+        if exception:
+            raise exception
+

@@ -78,13 +78,13 @@ retrieves a value from the `Request` object. [See below](#labels) for examples.
 
 `exemplars`: Optional dict containing label/value pairs. The "value" should be a callback function that returns the desired value at runtime.
 
-`group_paths`: setting this to `True` will populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`. This will group requests together by endpoint (regardless of the value of `item_id`). This option may come with a performance hit for larger routers. Default is `False`, which will result in separate metrics for different URLs (e.g., `/api/v1/items/42`, `/api/v1/items/43`, etc.).
+`group_paths`: Populate the path label using named parameters (if any) in the router path, e.g. `/api/v1/items/{item_id}`. This will group requests together by endpoint (regardless of the value of `item_id`). As of v0.18.0, the default is `True`, and changing to `False` is highly discouraged (see [warnings about cardinality](https://grafana.com/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/)).
 
-`filter_unhandled_paths`: setting this to `True` will cause the middleware to ignore requests with unhandled paths (in other words, 404 errors). This helps prevent filling up the metrics with 404 errors and/or intentially bad requests. Default is `False`.
+`filter_unhandled_paths`: setting this to `True` will cause the middleware to ignore requests with unhandled paths (in other words, 404 errors). This helps prevent filling up the metrics with 404 errors and/or intentially bad requests. Default is `True`.
 
 `buckets`: accepts an optional list of numbers to use as histogram buckets. The default value is `None`, which will cause the library to fall back on the Prometheus defaults (currently `[0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]`).
 
-`skip_paths`: accepts an optional list of paths that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
+`skip_paths`: accepts an optional list of paths, or regular expressions for paths, that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
 
 `skip_methods`: accepts an optional list of methods that will not collect metrics. The default value is `None`, which will cause the library to collect request metrics with each method. This option is useful to avoid collecting metrics on requests related to the communication description for endpoints.
 
@@ -106,7 +106,6 @@ app.add_middleware(
   labels={
       "server_name": os.getenv("HOSTNAME"),
   }),
-  group_paths=True,
   buckets=[0.1, 0.25, 0.5],
   skip_paths=['/health'],
   skip_methods=['OPTIONS'],
