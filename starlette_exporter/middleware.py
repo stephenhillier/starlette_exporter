@@ -138,7 +138,7 @@ class PrometheusMiddleware:
         # response labels will be evaluated while the response is
         # written.
         self.request_labels = OrderedDict({})
-        self.response_labels = OrderedDict({})
+        self.response_labels: OrderedDict[str, ResponseHeaderLabel] = OrderedDict({})
 
         if labels is not None:
             for k, v in labels.items():
