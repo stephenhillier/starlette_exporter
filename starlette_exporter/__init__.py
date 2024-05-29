@@ -1,6 +1,7 @@
 __all__ = [
     'PrometheusMiddleware',
     'from_header',
+    'from_response_header',
     'handle_metrics',
 ]
 
@@ -20,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from .middleware import PrometheusMiddleware
-from .labels import from_header
+from .labels import from_header, from_response_header
 
 
 def handle_metrics(request: Request) -> Response:

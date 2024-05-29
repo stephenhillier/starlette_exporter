@@ -24,6 +24,8 @@ from starlette.requests import Request
 from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from starlette_exporter.labels import ResponseHeaderLabel
+
 from . import optional_metrics
 
 logger = logging.getLogger("starlette_exporter")
@@ -114,7 +116,6 @@ class PrometheusMiddleware:
             self.optional_metrics_list = optional_metrics
         self.always_use_int_status = always_use_int_status
 
-        self.labels = OrderedDict(labels) if labels is not None else None
         self.exemplars = exemplars
         self._exemplars_req_kw = ""
 
@@ -132,7 +133,22 @@ class PrometheusMiddleware:
                 if "request" in exemplar_sig.parameters:
                     self._exemplars_req_kw = "request"
 
+
+        # split labels into request and response labels.
+        # response labels will be evaluated while the response is
+        # written.
+        self.request_labels = OrderedDict({})
+        self.response_labels: OrderedDict[str, ResponseHeaderLabel] = OrderedDict({})
+
+        if labels is not None:
+            for k, v in labels.items():
+                if isinstance(v, ResponseHeaderLabel):
+                    self.response_labels[k] = v
+                else:
+                    self.request_labels[k] = v
+
     # Default metrics
+    # Starlette initialises middleware multiple times, so store metrics on the class
 
     @property
     def request_count(self):
@@ -146,7 +162,8 @@ class PrometheusMiddleware:
                     "path",
                     "status_code",
                     "app_name",
-                    *self._default_label_keys(),
+                    *self.request_labels.keys(),
+                    *self.response_labels.keys(),
                 ),
             )
         return PrometheusMiddleware._metrics[metric_name]
@@ -174,7 +191,8 @@ class PrometheusMiddleware:
                         "path",
                         "status_code",
                         "app_name",
-                        *self._default_label_keys(),
+                        *self.request_labels.keys(),
+                        *self.response_labels.keys(),
                     ),
                 )
             return PrometheusMiddleware._metrics[metric_name]
@@ -200,7 +218,8 @@ class PrometheusMiddleware:
                         "path",
                         "status_code",
                         "app_name",
-                        *self._default_label_keys(),
+                        *self.request_labels.keys(),
+                        *self.response_labels.keys(),
                     ),
                 )
             return PrometheusMiddleware._metrics[metric_name]
@@ -219,7 +238,8 @@ class PrometheusMiddleware:
                     "path",
                     "status_code",
                     "app_name",
-                    *self._default_label_keys(),
+                    *self.request_labels.keys(),
+                    *self.response_labels.keys(),
                 ),
                 **self.kwargs,
             )
@@ -232,23 +252,15 @@ class PrometheusMiddleware:
             PrometheusMiddleware._metrics[metric_name] = Gauge(
                 metric_name,
                 "Total HTTP requests currently in progress",
-                ("method", "app_name", *self._default_label_keys()),
+                ("method", "app_name", *self.request_labels.keys()),
                 multiprocess_mode="livesum",
             )
         return PrometheusMiddleware._metrics[metric_name]
 
-    def _default_label_keys(self) -> List[str]:
-        if self.labels is None:
-            return []
-        return list(self.labels.keys())
-
-    async def _default_label_values(self, request: Request):
-        if self.labels is None:
-            return []
-
+    async def _request_label_values(self, request: Request) -> List[str]:
         values: List[str] = []
 
-        for k, v in self.labels.items():
+        for k, v in self.request_labels.items():
             if callable(v):
                 parsed_value = ""
                 # if provided a callable, try to use it on the request.
@@ -264,6 +276,34 @@ class PrometheusMiddleware:
                 continue
 
             values.append(v)
+
+        return values
+
+    def _response_label_values(self, message: Message) -> List[str]:
+        values: List[str] = []
+
+        # bail if no response labels were defined by the user
+        if not self.response_labels:
+            return values
+
+        # create a dict of headers to make it easy to find keys
+        headers = {
+            k.decode("utf-8"): v.decode("utf-8")
+            for (k, v) in message.get("headers", ())
+        }
+
+        for k, v in self.response_labels.items():
+            # currently only ResponseHeaderLabel supported
+            if isinstance(v, ResponseHeaderLabel):
+                parsed_value = ""
+                try:
+                    result = v(headers)
+                except Exception:
+                    logger.warn(f"label function for {k} failed", exc_info=True)
+                else:
+                    parsed_value = str(result)
+                values.append(parsed_value)
+
 
         return values
 
@@ -288,12 +328,15 @@ class PrometheusMiddleware:
         begin = time.perf_counter()
         end = None
 
-        default_labels = await self._default_label_values(request)
+        request_labels = await self._request_label_values(request)
 
         # Increment requests_in_progress gauge when request comes in
-        self.requests_in_progress.labels(method, self.app_name, *default_labels).inc()
+        self.requests_in_progress.labels(method, self.app_name, *request_labels).inc()
 
         status_code = None
+
+        # custom response label values, to be populated when response is written.
+        response_labels = []
 
         # optional request and response body size metrics
         response_body_size: int = 0
@@ -311,10 +354,13 @@ class PrometheusMiddleware:
                 nonlocal status_code
                 status_code = message["status"]
 
+                nonlocal response_labels
+                response_labels = self._response_label_values(message)
+
                 if self.always_use_int_status:
                     try:
                         status_code = int(message["status"])
-                    except ValueError as e:
+                    except ValueError:
                         logger.warning(
                             f"always_use_int_status flag selected but failed to convert status_code to int for value: {status_code}"
                         )
@@ -348,11 +394,18 @@ class PrometheusMiddleware:
         except Exception as e:
             status_code = 500
             exception = e
+        finally:
+            # Decrement 'requests_in_progress' gauge after response sent
+            self.requests_in_progress.labels(
+                method, self.app_name, *request_labels
+            ).dec()
 
-        # Decrement 'requests_in_progress' gauge after response sent
-        self.requests_in_progress.labels(
-            method, self.app_name, *default_labels
-        ).dec()
+        if status_code is None:
+            if await request.is_disconnected():
+                # In case no response was returned and the client is disconnected, 499 is reported as status code.
+                status_code = 499
+            else:
+                status_code = 500
 
         if self.filter_unhandled_paths or self.group_paths:
             grouped_path: Optional[str] = None
@@ -369,20 +422,21 @@ class PrometheusMiddleware:
                     raise exception
                 return
 
+
             # group_paths enables returning the original router path (with url param names)
             # for example, when using this option, requests to /api/product/1 and /api/product/3
             # will both be grouped under /api/product/{product_id}. See the README for more info.
             if self.group_paths and grouped_path is not None:
                 path = grouped_path
 
-        if status_code is None:
-            if await request.is_disconnected():
-                # In case no response was returned and the client is disconnected, 499 is reported as status code.
-                status_code = 499
-            else:
-                status_code = 500
-
-        labels = [method, path, status_code, self.app_name, *default_labels]
+        labels = [
+                method,
+                path,
+                status_code,
+                self.app_name,
+                *request_labels,
+                *response_labels,
+            ]
 
         # optional extra arguments to be passed as kwargs to observations
         # note: only used for histogram observations and counters to support exemplars
