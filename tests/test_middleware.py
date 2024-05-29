@@ -160,6 +160,17 @@ class TestMiddleware:
         metrics = client.get("/metrics").content.decode()
 
         assert "/404" not in metrics
+    
+    def test_404_group_unhandled_paths_on(self, testapp):
+        """test that an unknown path is captured in metrics if group_unhandled_paths=True"""
+        client = TestClient(testapp(group_unhandled_paths=True, filter_unhandled_paths=False))
+        client.get("/404")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",method="GET",path="__unknown__",status_code="404"} 1.0"""
+            in metrics
+        )
 
     def test_unhandled(self, client):
         """test that an unhandled exception still gets logged in the requests counter"""
