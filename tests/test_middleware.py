@@ -67,7 +67,7 @@ def testapp():
         )
 
         async def error(request):
-            raise HTTPException(status_code=500, detail="this is a test error")
+            raise HTTPException(status_code=500, detail="this is a test error", headers={"foo":"baz"})
 
         app.add_route("/500", error)
         app.add_route("/500/{test_param}", error)
@@ -801,6 +801,46 @@ class TestDefaultLabels:
 
         assert (
             """starlette_requests_total{app_name="starlette",foo="baz",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+    def test_from_response_header_case_insensitive(self, testapp):
+        """test with the library-provided from_response_header function with a capitalized header key."""
+        labels = {"foo": from_response_header("Foo"), "hello": "world"}
+        client = TestClient(testapp(labels=labels))
+        client.get("/200")
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="baz",hello="world",method="GET",path="/200",status_code="200"} 1.0"""
+            in metrics
+        ), metrics
+
+    def test_from_response_header_http_exception(self, testapp):
+        """test from_response_header against an endpoint that raises an HTTPException"""
+        labels = {"foo": from_response_header("foo"), "hello": "world"}
+        client = TestClient(testapp(labels=labels))
+        client.get("/500")
+        metrics = client.get("/metrics").content.decode()
+        
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="baz",hello="world",method="GET",path="/500",status_code="500"} 1.0"""
+            in metrics
+        ), metrics
+    
+    def test_from_response_header_unhandled_exception(self, testapp):
+        """test from_response_header function against an endpoint that raises an unhandled exception"""
+        labels = {"foo": from_response_header("foo"), "hello": "world"}
+        client = TestClient(testapp(labels=labels))
+
+        # make the test call. This raises an error but will still populate metrics.
+        with pytest.raises(KeyError, match="value_error"):
+            client.get("/unhandled")
+
+        metrics = client.get("/metrics").content.decode()
+
+        assert (
+            """starlette_requests_total{app_name="starlette",foo="",hello="world",method="GET",path="/unhandled",status_code="500"} 1.0"""
             in metrics
         ), metrics
 

@@ -2,7 +2,6 @@
 from typing import Any, Callable, Iterable, Optional, Dict
 
 from starlette.requests import Request
-from starlette.types import Message
 
 
 class ResponseHeaderLabel:
@@ -13,7 +12,7 @@ class ResponseHeaderLabel:
     def __init__(
         self, key: str, allowed_values: Optional[Iterable] = None, default: str = ""
     ) -> None:
-        self.key = key
+        self.key = key.lower()
         self.default = default
         self.allowed_values = allowed_values
 
