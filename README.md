@@ -82,6 +82,8 @@ retrieves a value from the `Request` object. [See below](#labels) for examples.
 
 `filter_unhandled_paths`: setting this to `True` will cause the middleware to ignore requests with unhandled paths (in other words, 404 errors). This helps prevent filling up the metrics with 404 errors and/or intentially bad requests. Default is `True`.
 
+`group_unhandled_paths`: Similar to `filter_unhandled_paths`, but instead of ignoring the requests, they are grouped under the `__unknown__` path. This option overrides `filter_unhandled_paths` by setting it to `False`. The default value is `False`.
+
 `buckets`: accepts an optional list of numbers to use as histogram buckets. The default value is `None`, which will cause the library to fall back on the Prometheus defaults (currently `[0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]`).
 
 `skip_paths`: accepts an optional list of paths, or regular expressions for paths, that will not collect metrics. The default value is `None`, which will cause the library to collect metrics on every requested path. This option is useful to avoid collecting metrics on health check, readiness or liveness probe endpoints.
