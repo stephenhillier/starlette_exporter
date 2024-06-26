@@ -300,7 +300,7 @@ class PrometheusMiddleware:
 
         # create a dict of headers to make it easy to find keys
         headers = {
-            k.decode("utf-8"): v.decode("utf-8")
+            k.decode("utf-8").lower(): v.decode("utf-8")
             for (k, v) in message.get("headers", ())
         }
 
@@ -405,6 +405,10 @@ class PrometheusMiddleware:
             await self.app(scope, receive, wrapped_send)
         except Exception as e:
             status_code = 500
+
+            # during an unhandled exception, populate response labels with empty strings.
+            response_labels = self._response_label_values({})
+
             exception = e
         finally:
             # Decrement 'requests_in_progress' gauge after response sent
