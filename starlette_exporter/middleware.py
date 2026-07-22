@@ -12,6 +12,7 @@ from typing import (
     Callable,
     ClassVar,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -22,14 +23,60 @@ from typing import (
 from prometheus_client import Counter, Gauge, Histogram
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import BaseRoute, Match
+from starlette.routing import BaseRoute, Match, Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from starlette_exporter.labels import ResponseHeaderLabel
 
 from . import optional_metrics
 
+def _import_iter_route_contexts() -> Optional[
+    Callable[[Sequence[BaseRoute]], Iterator[BaseRoute]]
+]:
+    """Import FastAPI's route-flattening helper, if available.
+
+    FastAPI >= 0.137.2 exposes a public helper that flattens routes added via
+    include_router() (nested under _IncludedRouter in 0.137) into matchable
+    RouteContext objects. Older versions don't have it; see _flatten_routes.
+
+    The yielded RouteContext wrappers are not BaseRoute subclasses, but they
+    proxy the underlying route's attributes (matches, path, routes, ...) via
+    __getattr__, so they are typed as BaseRoute here.
+    """
+    try:
+        from fastapi.routing import iter_route_contexts
+    except ImportError:
+        return None
+    return iter_route_contexts
+
+
+iter_route_contexts = _import_iter_route_contexts()
+
 logger = logging.getLogger("starlette_exporter")
+
+
+def _flatten_routes(routes: Sequence[BaseRoute]) -> Iterator[BaseRoute]:
+    """
+    Yield the matchable routes from an app's route list.
+
+    FastAPI 0.137 nests routes added via include_router() under _IncludedRouter
+    tree nodes, which expose no ``path`` attribute. They have to be flattened
+    into their effective route contexts (each providing matches() and the full
+    templated path) before they can be matched against a scope.
+
+    FastAPI >= 0.137.2 provides the public iter_route_contexts() for this, which
+    also wraps plain routes uniformly. On older versions fall back to the
+    private _IncludedRouter.effective_route_contexts(), and on FastAPI < 0.137
+    (no _IncludedRouter) the routes are already matchable as-is.
+    """
+    if iter_route_contexts is not None:
+        yield from iter_route_contexts(routes)
+        return
+    for starlette_route in routes:
+        if hasattr(starlette_route, "effective_route_contexts"):
+            yield from starlette_route.effective_route_contexts()
+        else:
+            yield starlette_route
 
 
 def get_matching_route_path(
@@ -45,19 +92,28 @@ def get_matching_route_path(
     Credit to https://github.com/elastic/apm-agent-python
     """
 
-    for route in routes:
-        match, child_scope = route.matches(scope)
+    for route in _flatten_routes(routes):
+        # call Route.matches unbound on plain Route instances so FastAPI
+        # subclasses that require router context to match can't interfere;
+        # flattened route contexts provide their own matches().
+        match, child_scope = (
+            Route.matches(route, scope)
+            if isinstance(route, Route)
+            else route.matches(scope)
+        )
         if match == Match.FULL:
             # set route name
             route_name = getattr(route, "path", None)
             if route_name is None:
-                return None
+                # routes added via host routing won't have a path attribute
+                return scope.get("path")
 
-            # for routes of type `BaseRoute`, the base route name may not
-            # be the complete path (it may represent the path to the
-            # mounted router). If this is a mounted route, descend into it to
-            # get the complete path.
-            if isinstance(route, BaseRoute) and getattr(route, "routes", None):
+            # the base route name may not be the complete path (it may
+            # represent the path to the mounted router). If this is a mounted
+            # route, descend into it to get the complete path. Checked via
+            # getattr because FastAPI's RouteContext wrappers are not
+            # BaseRoute instances but proxy the underlying route's attributes.
+            if getattr(route, "routes", None):
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope,
@@ -497,4 +553,3 @@ class PrometheusMiddleware:
 
         if exception:
             raise exception
-
