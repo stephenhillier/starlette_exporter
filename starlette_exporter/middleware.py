@@ -23,15 +23,16 @@ from typing import (
 from prometheus_client import Counter, Gauge, Histogram
 from prometheus_client.metrics import MetricWrapperBase
 from starlette.requests import Request
-from starlette.routing import BaseRoute, Match, Route
+from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from starlette_exporter.labels import ResponseHeaderLabel
 
 from . import optional_metrics
 
+
 def _import_iter_route_contexts() -> Optional[
-    Callable[[Sequence[BaseRoute]], Iterator[BaseRoute]]
+    Callable[[Sequence[BaseRoute]], Iterator[Any]]
 ]:
     """Import FastAPI's route-flattening helper, if available.
 
@@ -93,37 +94,35 @@ def get_matching_route_path(
     """
 
     for route in _flatten_routes(routes):
-        # call Route.matches unbound on plain Route instances so FastAPI
-        # subclasses that require router context to match can't interfere;
-        # flattened route contexts provide their own matches().
-        match, child_scope = (
-            Route.matches(route, scope)
-            if isinstance(route, Route)
-            else route.matches(scope)
-        )
+        # Route subclasses and FastAPI's effective route contexts can provide
+        # matching behavior beyond Starlette's base Route implementation.
+        match, child_scope = route.matches(scope)
         if match == Match.FULL:
-            # set route name
             route_name = getattr(route, "path", None)
-            if route_name is None:
-                # routes added via host routing won't have a path attribute
-                return scope.get("path")
+            child_routes = getattr(route, "routes", None)
 
             # the base route name may not be the complete path (it may
             # represent the path to the mounted router). If this is a mounted
-            # route, descend into it to get the complete path. Checked via
-            # getattr because FastAPI's RouteContext wrappers are not
+            # or host route, descend into it to get the complete path. Checked
+            # via getattr because FastAPI's RouteContext wrappers are not
             # BaseRoute instances but proxy the underlying route's attributes.
-            if getattr(route, "routes", None):
+            if child_routes:
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope,
-                    getattr(route, "routes"),
+                    child_routes,
                     route_name,
                 )
                 if child_route_name is None:
-                    route_name = None
-                else:
-                    route_name += child_route_name
+                    return None
+                if route_name is None:
+                    return child_route_name
+                route_name += child_route_name
+
+            # Host routes and other pathless routes without a matching child
+            # cannot be safely grouped without using the literal request path.
+            if route_name is None:
+                return None
             return route_name
         elif match == Match.PARTIAL and route_name is None:
             route_name = getattr(route, "path", None)
@@ -456,7 +455,7 @@ class PrometheusMiddleware:
             await send(message)
 
         exception: Optional[Exception] = None
-        original_scope = scope.copy()
+        original_scope = dict(scope)
         try:
             await self.app(scope, receive, wrapped_send)
         except Exception as e:
