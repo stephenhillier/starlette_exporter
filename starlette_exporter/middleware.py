@@ -51,24 +51,17 @@ logger = logging.getLogger("starlette_exporter")
 def _flatten_routes(routes: Sequence[BaseRoute]) -> Iterator[BaseRoute]:
     """
     Yield the matchable routes from an app's route list.
-
-    FastAPI 0.137 nests routes added via include_router() under _IncludedRouter
-    tree nodes, which expose no ``path`` attribute. They have to be flattened
-    into their effective route contexts (each providing matches() and the full
-    templated path) before they can be matched against a scope.
-
-    FastAPI >= 0.137.2 provides the public iter_route_contexts() for this, which
-    also wraps plain routes uniformly. On older versions fall back to the
-    private _IncludedRouter.effective_route_contexts(), and on FastAPI < 0.137
-    (no _IncludedRouter) the routes are already matchable as-is.
     """
     if iter_route_contexts is not None:
+        # FastAPI >0.137.2
         yield from iter_route_contexts(routes)
         return
     for starlette_route in routes:
+        # FastAPI >=0.137.0, <1.37.2
         if hasattr(starlette_route, "effective_route_contexts"):
             yield from starlette_route.effective_route_contexts()
         else:
+            # Starlette and FastAPI < 0.137.0
             yield starlette_route
 
 
