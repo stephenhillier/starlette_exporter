@@ -35,14 +35,6 @@ def _import_iter_route_contexts() -> Optional[
     Callable[[Sequence[BaseRoute]], Iterator[Any]]
 ]:
     """Import FastAPI's route-flattening helper, if available.
-
-    FastAPI >= 0.137.2 exposes a public helper that flattens routes added via
-    include_router() (nested under _IncludedRouter in 0.137) into matchable
-    RouteContext objects. Older versions don't have it; see _flatten_routes.
-
-    The yielded RouteContext wrappers are not BaseRoute subclasses, but they
-    proxy the underlying route's attributes (matches, path, routes, ...) via
-    __getattr__, so they are typed as BaseRoute here.
     """
     try:
         from fastapi.routing import iter_route_contexts
@@ -103,9 +95,7 @@ def get_matching_route_path(
 
             # the base route name may not be the complete path (it may
             # represent the path to the mounted router). If this is a mounted
-            # or host route, descend into it to get the complete path. Checked
-            # via getattr because FastAPI's RouteContext wrappers are not
-            # BaseRoute instances but proxy the underlying route's attributes.
+            # or host route, descend into it to get the complete path.
             if child_routes:
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
@@ -119,8 +109,6 @@ def get_matching_route_path(
                     return child_route_name
                 route_name += child_route_name
 
-            # Host routes and other pathless routes without a matching child
-            # cannot be safely grouped without using the literal request path.
             if route_name is None:
                 return None
             return route_name
