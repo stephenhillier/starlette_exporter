@@ -4,10 +4,15 @@ import pytest
 from prometheus_client import REGISTRY, generate_latest
 
 fastapi = pytest.importorskip("fastapi")
+fastapi_version = tuple(int(part) for part in fastapi.__version__.split(".")[:2])
 
 from fastapi import APIRouter, FastAPI
+from starlette.applications import Starlette
+from starlette.responses import Response
+from starlette.routing import Mount, Route
 
 from starlette_exporter import PrometheusMiddleware
+from starlette_exporter.middleware import get_matching_route_path
 
 
 @pytest.fixture
@@ -58,6 +63,20 @@ async def make_request(app, path):
     return response_status
 
 
+async def starlette_endpoint(request):
+    return Response()
+
+
+def http_scope(path):
+    return {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "root_path": "",
+        "headers": [(b"host", b"testserver")],
+    }
+
+
 def test_nested_included_router_path_is_grouped(isolated_metrics_registry):
     items = APIRouter()
 
@@ -84,4 +103,37 @@ def test_nested_included_router_path_is_grouped(isolated_metrics_registry):
         'fastapi_routing_requests_total{app_name="starlette",'
         'method="GET",path="/api/items/{item_id}",status_code="200"} 1.0'
         in metrics
+    )
+
+
+def test_included_starlette_route_path_is_grouped():
+    router = APIRouter(
+        routes=[Route("/users/{user_id}", starlette_endpoint)],
+    )
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+
+    assert (
+        get_matching_route_path(http_scope("/api/users/123"), app.routes)
+        == "/api/users/{user_id}"
+    )
+
+
+@pytest.mark.skipif(
+    fastapi_version < (0, 137),
+    reason="FastAPI <0.137 does not retain mounts from included routers",
+)
+def test_included_mount_descends_into_child_routes():
+    mounted_app = Starlette(
+        routes=[Route("/users/{user_id}", starlette_endpoint)],
+    )
+    router = APIRouter(
+        routes=[Mount("/sub", app=mounted_app)],
+    )
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+
+    assert (
+        get_matching_route_path(http_scope("/api/sub/users/123"), app.routes)
+        == "/api/sub/users/{user_id}"
     )

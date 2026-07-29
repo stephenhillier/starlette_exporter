@@ -48,18 +48,27 @@ iter_route_contexts = _import_iter_route_contexts()
 logger = logging.getLogger("starlette_exporter")
 
 
+def _matchable_route(route: Any) -> BaseRoute:
+    """
+    Return the synthesized Starlette route from a FastAPI route context.
+    """
+    return getattr(route, "starlette_route", None) or route
+
+
 def _flatten_routes(routes: Sequence[BaseRoute]) -> Iterator[BaseRoute]:
     """
     Yield the matchable routes from an app's route list.
     """
     if iter_route_contexts is not None:
         # FastAPI >0.137.2
-        yield from iter_route_contexts(routes)
+        for route_context in iter_route_contexts(routes):
+            yield _matchable_route(route_context)
         return
     for starlette_route in routes:
         # FastAPI >=0.137.0, <1.37.2
         if hasattr(starlette_route, "effective_route_contexts"):
-            yield from starlette_route.effective_route_contexts()
+            for route_context in starlette_route.effective_route_contexts():
+                yield _matchable_route(route_context)
         else:
             # Starlette and FastAPI < 0.137.0
             yield starlette_route
