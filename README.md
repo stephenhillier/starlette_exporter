@@ -242,12 +242,12 @@ For more information, see the [Prometheus Python client documentation](https://g
 
 ## Developing
 
-This package supports Python 3.6+.
+This package supports Python 3.8+.
 
 ```sh
 git clone https://github.com/stephenhillier/starlette_exporter
 cd starlette_exporter
-pytest tests
+python -m pytest tests
 ```
 
 ## License

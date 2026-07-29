@@ -12,6 +12,7 @@ from typing import (
     Callable,
     ClassVar,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -29,7 +30,48 @@ from starlette_exporter.labels import ResponseHeaderLabel
 
 from . import optional_metrics
 
+
+def _import_iter_route_contexts() -> Optional[
+    Callable[[Sequence[BaseRoute]], Iterator[Any]]
+]:
+    """Import FastAPI's route-flattening helper, if available.
+    """
+    try:
+        from fastapi.routing import iter_route_contexts
+    except ImportError:
+        return None
+    return iter_route_contexts
+
+
+iter_route_contexts = _import_iter_route_contexts()
+
 logger = logging.getLogger("starlette_exporter")
+
+
+def _matchable_route(route: Any) -> BaseRoute:
+    """
+    Return the synthesized Starlette route from a FastAPI route context.
+    """
+    return getattr(route, "starlette_route", None) or route
+
+
+def _flatten_routes(routes: Sequence[BaseRoute]) -> Iterator[BaseRoute]:
+    """
+    Yield the matchable routes from an app's route list.
+    """
+    if iter_route_contexts is not None:
+        # FastAPI >0.137.2
+        for route_context in iter_route_contexts(routes):
+            yield _matchable_route(route_context)
+        return
+    for starlette_route in routes:
+        # FastAPI >=0.137.0, <1.37.2
+        if hasattr(starlette_route, "effective_route_contexts"):
+            for route_context in starlette_route.effective_route_contexts():
+                yield _matchable_route(route_context)
+        else:
+            # Starlette and FastAPI < 0.137.0
+            yield starlette_route
 
 
 def get_matching_route_path(
@@ -45,29 +87,32 @@ def get_matching_route_path(
     Credit to https://github.com/elastic/apm-agent-python
     """
 
-    for route in routes:
+    for route in _flatten_routes(routes):
+        # Route subclasses and FastAPI's effective route contexts can provide
+        # matching behavior beyond Starlette's base Route implementation.
         match, child_scope = route.matches(scope)
         if match == Match.FULL:
-            # set route name
             route_name = getattr(route, "path", None)
-            if route_name is None:
-                return None
+            child_routes = getattr(route, "routes", None)
 
-            # for routes of type `BaseRoute`, the base route name may not
-            # be the complete path (it may represent the path to the
-            # mounted router). If this is a mounted route, descend into it to
-            # get the complete path.
-            if isinstance(route, BaseRoute) and getattr(route, "routes", None):
+            # the base route name may not be the complete path (it may
+            # represent the path to the mounted router). If this is a mounted
+            # or host route, descend into it to get the complete path.
+            if child_routes:
                 child_scope = {**scope, **child_scope}
                 child_route_name = get_matching_route_path(
                     child_scope,
-                    getattr(route, "routes"),
+                    child_routes,
                     route_name,
                 )
                 if child_route_name is None:
-                    route_name = None
-                else:
-                    route_name += child_route_name
+                    return None
+                if route_name is None:
+                    return child_route_name
+                route_name += child_route_name
+
+            if route_name is None:
+                return None
             return route_name
         elif match == Match.PARTIAL and route_name is None:
             route_name = getattr(route, "path", None)
@@ -400,7 +445,7 @@ class PrometheusMiddleware:
             await send(message)
 
         exception: Optional[Exception] = None
-        original_scope = scope.copy()
+        original_scope = dict(scope)
         try:
             await self.app(scope, receive, wrapped_send)
         except Exception as e:
@@ -497,4 +542,3 @@ class PrometheusMiddleware:
 
         if exception:
             raise exception
-
