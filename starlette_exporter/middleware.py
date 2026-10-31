@@ -422,25 +422,20 @@ class PrometheusMiddleware:
                             f"always_use_int_status flag selected but failed to convert status_code to int for value: {status_code}"
                         )
 
-                # find response body size for optional metric
+            if message["type"] == "http.response.body":
+                nonlocal end
+                end = time.perf_counter()
+
+                # count the body bytes actually sent for the optional metric.
+                # Streaming responses have no content-length header, so the
+                # header alone would report 0 bytes for them.
                 if (
                     self.optional_metrics_list is not None
                     and optional_metrics.response_body_size
                     in self.optional_metrics_list
                 ):
                     nonlocal response_body_size
-                    for message_content_length in message["headers"]:
-                        if (
-                            message_content_length[0].decode("utf-8")
-                            == "content-length"
-                        ):
-                            response_body_size += int(
-                                message_content_length[1].decode("utf-8")
-                            )
-
-            if message["type"] == "http.response.body":
-                nonlocal end
-                end = time.perf_counter()
+                    response_body_size += len(message.get("body", b""))
 
             await send(message)
 

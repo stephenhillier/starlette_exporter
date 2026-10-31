@@ -7,7 +7,7 @@ from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.testclient import TestClient
@@ -653,6 +653,43 @@ class TestOptionalMetrics:
         ]
         response_size = response_size_metric[0].split("} ")[1]
         assert float(response_size) > 0.1
+
+    def test_response_body_size_streaming(self, testapp):
+        """streaming responses have no content-length header, but their body bytes should still be counted"""
+        app = testapp(optional_metrics=[response_body_size])
+
+        async def stream_chunks():
+            for chunk in (b"hello ", b"streaming ", b"world"):
+                yield chunk
+
+        def streaming(request):
+            return StreamingResponse(stream_chunks())
+
+        app.add_route("/streaming", streaming)
+        client = TestClient(app)
+        response = client.get("/streaming")
+        assert "content-length" not in response.headers
+
+        metrics = client.get("/metrics").content.decode()
+        response_size_metric = [
+            s
+            for s in metrics.split("\n")
+            if ("starlette_response_body_bytes_total" in s and 'path="/streaming"' in s)
+        ]
+        response_size = response_size_metric[0].split("} ")[1]
+        assert float(response_size) == len(b"hello streaming world")
+
+    def test_response_body_size_matches_content_length(self, client):
+        response = client.get("/200")
+
+        metrics = client.get("/metrics").content.decode()
+        response_size_metric = [
+            s
+            for s in metrics.split("\n")
+            if ("starlette_response_body_bytes_total" in s and 'path="/200"' in s)
+        ]
+        response_size = response_size_metric[0].split("} ")[1]
+        assert float(response_size) == int(response.headers["content-length"])
 
     def test_receive_body_size(self, client):
         client.post("/200", json={"test_post": ["d", "a"]})
